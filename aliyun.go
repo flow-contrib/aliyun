@@ -2,7 +2,6 @@ package aliyun
 
 import (
 	"fmt"
-	"github.com/denverdino/aliyungo/slb"
 	"strings"
 
 	"github.com/denverdino/aliyungo/common"
@@ -10,6 +9,7 @@ import (
 	"github.com/denverdino/aliyungo/ecs"
 	"github.com/denverdino/aliyungo/oss"
 	"github.com/denverdino/aliyungo/rds"
+	"github.com/denverdino/aliyungo/slb"
 
 	"github.com/gogap/config"
 	"github.com/gogap/context"
@@ -33,7 +33,12 @@ type Aliyun struct {
 
 func NewAliyun(ctx context.Context, conf config.Configuration) *Aliyun {
 
-	code, _ := ctx.Value("CODE").(string)
+	code := conf.GetString("aliyun.code")
+
+	if len(code) == 0 {
+		panic(fmt.Errorf("the config of aliyun.code is empty"))
+	}
+
 	region := conf.GetString("aliyun.region", "cn-beijing")
 	zoneId := conf.GetString("aliyun.zone-id")
 	akId := conf.GetString("aliyun.access-key-id")
