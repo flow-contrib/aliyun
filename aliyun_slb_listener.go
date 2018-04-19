@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/denverdino/aliyungo/slb"
-	"github.com/gogap/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 type CreateLoadBalancerHTTPListenerArgs struct {

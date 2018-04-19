@@ -17,8 +17,8 @@ import (
 
 	"github.com/chr4/pwgen"
 	"github.com/denverdino/aliyungo/cs"
-	"github.com/gogap/logrus"
 	"github.com/howeyc/gopass"
+	"github.com/sirupsen/logrus"
 )
 
 type EnvFunc func(code, key string, query url.Values) (ret string, err error)

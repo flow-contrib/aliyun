@@ -6,7 +6,7 @@ import (
 
 	"github.com/denverdino/aliyungo/ecs"
 	"github.com/denverdino/aliyungo/slb"
-	"github.com/gogap/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupArgs, err error) {

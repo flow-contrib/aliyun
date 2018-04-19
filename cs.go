@@ -1,6 +1,7 @@
 package aliyun
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -26,6 +27,8 @@ func CreateDockerCluster(ctx context.Context, conf config.Configuration) (err er
 	aliyun := NewAliyun(ctx, conf)
 
 	args, err := aliyun.CreateDockerClusterArgs()
+
+	fmt.Println("errr", err)
 
 	if err != nil {
 		return

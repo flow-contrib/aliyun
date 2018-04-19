@@ -5,7 +5,7 @@ import (
 
 	"github.com/denverdino/aliyungo/cs"
 	"github.com/denverdino/aliyungo/ecs"
-	"github.com/gogap/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 type DockerClusterVolume struct {

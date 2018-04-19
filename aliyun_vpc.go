@@ -7,7 +7,7 @@ import (
 
 	"github.com/denverdino/aliyungo/common"
 	"github.com/denverdino/aliyungo/ecs"
-	"github.com/gogap/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func (p *Aliyun) CreateVPCArgs() (createArgs []*ecs.CreateVpcArgs, err error) {

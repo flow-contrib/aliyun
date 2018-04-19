@@ -7,7 +7,7 @@ import (
 	"github.com/denverdino/aliyungo/common"
 	"github.com/denverdino/aliyungo/ecs"
 	"github.com/denverdino/aliyungo/rds"
-	"github.com/gogap/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func (p *Aliyun) ListRDSInstance() (resp *rds.DescribeDBInstancesResponse, err error) {

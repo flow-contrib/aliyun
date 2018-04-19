@@ -5,7 +5,7 @@ import (
 
 	"github.com/denverdino/aliyungo/ecs"
 	"github.com/denverdino/aliyungo/slb"
-	"github.com/gogap/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func (p *Aliyun) ListLoadBalancers(details bool) (val map[string]*slb.LoadBalancerType, err error) {
