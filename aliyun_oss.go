@@ -25,7 +25,9 @@ func (p *Aliyun) CreateOSSBucketArgs() (createArgs []*OSSBucketCreateArgs, err e
 	ossConf := p.Config.GetConfig("aliyun.oss")
 
 	var args []*OSSBucketCreateArgs
-	for _, bucketName := range ossConf.Keys() {
+	for _, key := range ossConf.Keys() {
+
+		bucketName := ossConf.GetString(key+".name", key)
 
 		_, exist := mapBuckets[bucketName]
 
@@ -51,7 +53,9 @@ func (p *Aliyun) OSSBuckets() []*oss.Bucket {
 	ossConf := p.Config.GetConfig("aliyun.oss")
 
 	var buckets []*oss.Bucket
-	for _, bucketName := range ossConf.Keys() {
+	for _, key := range ossConf.Keys() {
+
+		bucketName := ossConf.GetString(key+".name", key)
 
 		bucket := p.OSSClient().Bucket(bucketName)
 
