@@ -33,10 +33,14 @@ type Aliyun struct {
 
 func NewAliyun(ctx context.Context, conf config.Configuration) *Aliyun {
 
-	code := conf.GetString("aliyun.code")
+	code, _ := ctx.Value("code").(string)
 
 	if len(code) == 0 {
-		panic(fmt.Errorf("the config of aliyun.code is empty"))
+		code = conf.GetString("code")
+	}
+
+	if len(code) == 0 {
+		panic(fmt.Errorf("the context of code is empty"))
 	}
 
 	region := conf.GetString("aliyun.region", "cn-beijing")
