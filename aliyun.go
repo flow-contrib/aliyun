@@ -8,8 +8,9 @@ import (
 	"github.com/denverdino/aliyungo/cs"
 	"github.com/denverdino/aliyungo/ecs"
 	"github.com/denverdino/aliyungo/oss"
-	"github.com/denverdino/aliyungo/rds"
 	"github.com/denverdino/aliyungo/slb"
+
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
 
 	"github.com/gogap/config"
 	"github.com/gogap/context"
@@ -56,34 +57,51 @@ func NewAliyun(ctx context.Context, conf config.Configuration) *Aliyun {
 		Region:          common.Region(region),
 		ZoneId:          zoneId,
 		Code:            code,
-
-		ecsClient: ecs.NewClient(akId, akSecret),
-		ossClient: oss.NewOSSClient(oss.Region("oss-"+region), false, akId, akSecret, true),
-		rdsClient: rds.NewRDSClient(akId, akSecret, common.Region(region)),
-		csClient:  cs.NewClient(akId, akSecret),
-		slbClient: slb.NewSLBClient(akId, akSecret, common.Region(region)),
 	}
 
 	return ali
 }
 
 func (p *Aliyun) ECSClient() *ecs.Client {
+	if p.ecsClient == nil {
+		p.ecsClient = ecs.NewClient(p.AccessKeyId, p.AccessKeySecret)
+	}
+
 	return p.ecsClient
 }
 
 func (p *Aliyun) OSSClient() *oss.Client {
+	if p.ossClient == nil {
+		p.ossClient = oss.NewOSSClient(oss.Region("oss-"+string(p.Region)), false, p.AccessKeyId, p.AccessKeySecret, true)
+	}
+
 	return p.ossClient
 }
 
 func (p *Aliyun) RDSClient() *rds.Client {
+	if p.rdsClient == nil {
+		var err error
+		p.rdsClient, err = rds.NewClientWithAccessKey(string(p.Region), p.AccessKeyId, p.AccessKeySecret)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	return p.rdsClient
 }
 
 func (p *Aliyun) CSClient() *cs.Client {
+	if p.csClient == nil {
+		p.csClient = cs.NewClient(p.AccessKeyId, p.AccessKeySecret)
+	}
+
 	return p.csClient
 }
 
 func (p *Aliyun) SLBClient() *slb.Client {
+	if p.slbClient == nil {
+		p.slbClient = slb.NewSLBClient(p.AccessKeyId, p.AccessKeySecret, p.Region)
+	}
 	return p.slbClient
 }
 

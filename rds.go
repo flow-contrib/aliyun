@@ -3,7 +3,6 @@ package aliyun
 import (
 	"sync"
 
-	"github.com/denverdino/aliyungo/rds"
 	"github.com/gogap/config"
 	"github.com/gogap/context"
 	"github.com/gogap/flow"
@@ -11,38 +10,30 @@ import (
 )
 
 func init() {
-	flow.RegisterHandler("devops.aliyun.rds.instance.create", CreateRDSInstance)
-	flow.RegisterHandler("devops.aliyun.rds.instance.delete", DeleteRDSInstance)
-	flow.RegisterHandler("devops.aliyun.rds.instance.running.wait", WaitForAllRDSRunning)
+	flow.RegisterHandler("devops.aliyun.rds.db.create", CreateRDSInstance)
+	flow.RegisterHandler("devops.aliyun.rds.db.delete", DeleteRDSInstance)
+	flow.RegisterHandler("devops.aliyun.rds.db.running.wait", WaitForAllRDSRunning)
+	flow.RegisterHandler("devops.aliyun.rds.db.account.create", CreateRDSDbAccounts)
 }
 
 func CreateRDSInstance(ctx context.Context, conf config.Configuration) (err error) {
 
 	aliyun := NewAliyun(ctx, conf)
 
-	args, err := aliyun.CreateRDSInstanceArgs()
+	_, err = aliyun.CreateRDSInstances()
 
 	if err != nil {
 		return
 	}
 
-	for _, arg := range args {
+	return
+}
 
-		var resp rds.CreateDBInstanceResponse
-		resp, err = aliyun.RDSClient().CreateDBInstance(arg)
+func CreateRDSDbAccounts(ctx context.Context, conf config.Configuration) (err error) {
 
-		if err != nil {
-			return
-		}
+	aliyun := NewAliyun(ctx, conf)
 
-		logrus.WithField("CODE", aliyun.Code).
-			WithField("RDS-DBINSTANCE-ID", resp.DBInstanceId).
-			WithField("RDS-ENGINE", string(arg.Engine)+" "+arg.EngineVersion).
-			WithField("RDS-CONN-STR", resp.ConnectionString).
-			WithField("RDS-REGION", arg.RegionId).
-			WithField("RDS-VSWITCH-ID", arg.VSwitchId).
-			Infoln("Db instance created")
-	}
+	err = aliyun.CreateRDSDbAccount()
 
 	return
 }
@@ -51,21 +42,19 @@ func DeleteRDSInstance(ctx context.Context, conf config.Configuration) (err erro
 
 	aliyun := NewAliyun(ctx, conf)
 
-	args, err := aliyun.DeleteRDSInstanceArgs()
+	err = aliyun.DeleteRDSInstances()
+
+	return
+}
+
+func DescribeRDSInstances(ctx context.Context, conf config.Configuration) (err error) {
+
+	aliyun := NewAliyun(ctx, conf)
+
+	_, err = aliyun.DescribeRDSInstances()
 
 	if err != nil {
 		return
-	}
-
-	for _, arg := range args {
-
-		err = aliyun.RDSClient().DeleteInstance(arg.DBInstanceId)
-
-		if err != nil {
-			return
-		}
-
-		logrus.WithField("CODE", aliyun.Code).WithField("RDS-DBINSTANCE-ID", arg.DBInstanceId).Infoln("Db instance deleted")
 	}
 
 	return
@@ -74,7 +63,7 @@ func DeleteRDSInstance(ctx context.Context, conf config.Configuration) (err erro
 func WaitForAllRDSRunning(ctx context.Context, conf config.Configuration) (err error) {
 	aliyun := NewAliyun(ctx, conf)
 
-	inst, err := aliyun.ListRDSInstance()
+	inst, err := aliyun.ListRDSInstance(nil)
 
 	if err != nil {
 		return
@@ -87,7 +76,7 @@ func WaitForAllRDSRunning(ctx context.Context, conf config.Configuration) (err e
 		go func(instId, name string) {
 			defer wg.Done()
 			logrus.WithField("CODE", aliyun.Code).WithField("RDS-DBINSTANCE-ID", instId).WithField("RDS-DBINSTANCE-NAME", name).Infoln("Waiting db instance")
-			aliyun.RDSClient().WaitForInstance(instId, rds.Running, 60*20)
+			aliyun.WaitForDBInstance(instId, "Running", 60*20)
 		}(v.DBInstanceId, v.DBInstanceDescription)
 	}
 
