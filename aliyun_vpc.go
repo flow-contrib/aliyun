@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (p *Aliyun) CreateVPCArgs() (createArgs []*ecs.CreateVpcArgs, err error) {
+func (p *Aliyun) CreateVPCs() (err error) {
 
 	vpcsConf := p.Config.GetConfig("aliyun.ecs.vpc")
 
@@ -71,12 +71,24 @@ func (p *Aliyun) CreateVPCArgs() (createArgs []*ecs.CreateVpcArgs, err error) {
 		args = append(args, arg)
 	}
 
-	createArgs = args
+	for _, arg := range args {
+
+		resp, e := p.ECSClient().CreateVpc(arg)
+		if e != nil {
+			return e
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("ECS-VPC-NAME", arg.VpcName).
+			WithField("ECS-VPC-ID", resp.VpcId).
+			WithField("ECS-VPC-REGION", arg.RegionId).
+			Infoln("VPC created")
+	}
 
 	return
 }
 
-func (p *Aliyun) DeleteVPCArgs() (deleteArgs []*ecs.DeleteVpcArgs, err error) {
+func (p *Aliyun) DeleteVPCArgs() (err error) {
 	vpcsConf := p.Config.GetConfig("aliyun.ecs.vpc")
 
 	if vpcsConf.IsEmpty() {
@@ -123,7 +135,17 @@ func (p *Aliyun) DeleteVPCArgs() (deleteArgs []*ecs.DeleteVpcArgs, err error) {
 		}
 	}
 
-	deleteArgs = args
+	for _, arg := range args {
+
+		err = p.ECSClient().DeleteVpc(arg.VpcId)
+		if err != nil {
+			return
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("ECS-VPC-ID", arg.VpcId).
+			Infoln("VPC deleted")
+	}
 
 	return
 }
@@ -246,7 +268,7 @@ func (p *Aliyun) FindVSwitch(vpcName, vSwitchName string) (ret *ecs.VSwitchSetTy
 	return
 }
 
-func (p *Aliyun) CreateVSwitch() (createArgs []*ecs.CreateVSwitchArgs, err error) {
+func (p *Aliyun) CreateVSwitch() (err error) {
 	vpcsConf := p.Config.GetConfig("aliyun.ecs.vswitch")
 
 	if vpcsConf.IsEmpty() {
@@ -329,11 +351,22 @@ func (p *Aliyun) CreateVSwitch() (createArgs []*ecs.CreateVSwitchArgs, err error
 		args = append(args, arg)
 	}
 
-	createArgs = args
+	for _, arg := range args {
+
+		switchId, e := p.ECSClient().CreateVSwitch(arg)
+		if e != nil {
+			return e
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("ECS-VSWITCH-NAME", arg.VSwitchName).
+			WithField("ECS-VSWITCH-ID", switchId).
+			Infoln("VSwitch created")
+	}
 
 	return
 }
-func (p *Aliyun) DeleteVSwitchArgs() (deleteArgs []*ecs.DeleteVSwitchArgs, err error) {
+func (p *Aliyun) DeleteVSwitchArgs() (err error) {
 	vSwitchsConf := p.Config.GetConfig("aliyun.ecs.vswitch")
 
 	if vSwitchsConf.IsEmpty() {
@@ -369,7 +402,17 @@ func (p *Aliyun) DeleteVSwitchArgs() (deleteArgs []*ecs.DeleteVSwitchArgs, err e
 		args = append(args, arg)
 	}
 
-	deleteArgs = args
+	for _, arg := range args {
+
+		err = p.ECSClient().DeleteVSwitch(arg.VSwitchId)
+		if err != nil {
+			return
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("ECS-VSWITCH-ID", arg.VSwitchId).
+			Infoln("VSwitch deleted")
+	}
 
 	return
 }
