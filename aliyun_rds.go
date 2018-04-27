@@ -14,7 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (p *Aliyun) ListRDSInstance(tags map[string]string) (resp *rds.DescribeDBInstancesResponse, err error) {
+func (p *Aliyun) listRDSInstance(tags map[string]string) (resp *rds.DescribeDBInstancesResponse, err error) {
 
 	describReq := rds.CreateDescribeDBInstancesRequest()
 
@@ -45,9 +45,37 @@ func (p *Aliyun) ListRDSInstance(tags map[string]string) (resp *rds.DescribeDBIn
 	return
 }
 
+func (p *Aliyun) DescribeRDSInstancesAttr() (attr []rds.DBInstanceAttribute, err error) {
+
+	resp, err := p.listRDSInstance(nil)
+	if err != nil {
+		return
+	}
+
+	var ids []string
+
+	for _, inst := range resp.Items.DBInstance {
+		ids = append(ids, inst.DBInstanceId)
+	}
+
+	strIds := strings.Join(ids, ",")
+
+	descReq := rds.CreateDescribeDBInstanceAttributeRequest()
+
+	descReq.DBInstanceId = strIds
+
+	attrResp, err := p.RDSClient().DescribeDBInstanceAttribute(descReq)
+
+	if err != nil {
+		return
+	}
+
+	return attrResp.Items.DBInstanceAttribute, nil
+}
+
 func (p *Aliyun) FindRDSInstance(engine, vpcName, vSwitchName, rdsName string) (attrs *rds.DBInstance, err error) {
 
-	dbInsResp, err := p.ListRDSInstance(map[string]string{"name": rdsName})
+	dbInsResp, err := p.listRDSInstance(map[string]string{"name": rdsName})
 
 	if err != nil {
 		return
@@ -101,7 +129,6 @@ func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceRespon
 		}
 
 		engine := rdsConf.GetString("engine", "MySQL")
-		desc := rdsConf.GetString("instance-description")
 
 		var dbIns *rds.DBInstance
 		dbIns, err = p.FindRDSInstance(engine, vpcName, vSwitchName, rdsName)
@@ -138,7 +165,7 @@ func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceRespon
 		arg.DBInstanceClass = rdsConf.GetString("instance-class", "rds.mys2.small")
 		arg.DBInstanceStorage = requests.Integer(rdsConf.GetString("instance-storage", "5"))
 		arg.DBInstanceNetType = rdsConf.GetString("instance-net-type", "Internet")
-		arg.DBInstanceDescription = p.signWithCode(rdsName + " " + desc)
+		arg.DBInstanceDescription = rdsName
 		arg.InstanceNetworkType = rdsConf.GetString("instance-network-type", "VPC")
 
 		arg.VPCId = vSwitch.VpcId
@@ -397,50 +424,6 @@ func (p *Aliyun) DeleteRDSInstances() (err error) {
 
 		logrus.WithField("CODE", p.Code).WithField("RDS-DBINSTANCE-ID", arg.DBInstanceId).Infoln("Db instance deleted")
 	}
-
-	return
-}
-
-func (p *Aliyun) DescribeRDSInstances() (resps []*rds.DBInstance, err error) {
-	rdssConf := p.Config.GetConfig("aliyun.rds")
-
-	if rdssConf.IsEmpty() {
-		return
-	}
-
-	var insts []*rds.DBInstance
-
-	for _, rdsName := range rdssConf.Keys() {
-
-		rdsConf := rdssConf.GetConfig(rdsName)
-
-		vpcName := rdsConf.GetString("vpc-name")
-		vSwitchName := rdsConf.GetString("vswitch-name")
-
-		if len(vpcName) == 0 || len(vSwitchName) == 0 {
-			err = fmt.Errorf("rds config of %s's vpc-name or vswitch-name is empty", rdsName)
-			return
-		}
-
-		engine := rdsConf.GetString("engine", "MySQL")
-
-		var dbIns *rds.DBInstance
-		dbIns, err = p.FindRDSInstance(engine, vpcName, vSwitchName, rdsName)
-		if err != nil {
-			if strings.Contains(err.Error(), "vswitch not found") {
-				err = nil
-			}
-			return
-		}
-
-		if dbIns == nil {
-			continue
-		}
-
-		insts = append(insts, dbIns)
-	}
-
-	resps = insts
 
 	return
 }

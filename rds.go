@@ -1,6 +1,7 @@
 package aliyun
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/gogap/config"
@@ -11,6 +12,7 @@ import (
 
 func init() {
 	flow.RegisterHandler("devops.aliyun.rds.db.create", CreateRDSInstance)
+	flow.RegisterHandler("devops.aliyun.rds.db.describe", DescribeRDSInstances)
 	flow.RegisterHandler("devops.aliyun.rds.db.delete", DeleteRDSInstance)
 	flow.RegisterHandler("devops.aliyun.rds.db.running.wait", WaitForAllRDSRunning)
 	flow.RegisterHandler("devops.aliyun.rds.db.account.create", CreateRDSDbAccounts)
@@ -51,11 +53,29 @@ func DescribeRDSInstances(ctx context.Context, conf config.Configuration) (err e
 
 	aliyun := NewAliyun(ctx, conf)
 
-	_, err = aliyun.DescribeRDSInstances()
-
+	insts, err := aliyun.DescribeRDSInstancesAttr()
 	if err != nil {
 		return
 	}
+
+	if len(insts) == 0 {
+		return
+	}
+
+	ouputData, err := json.Marshal(insts)
+	if err != nil {
+		return
+	}
+
+	var tags []string
+
+	for _, inst := range insts {
+		tags = append(tags, inst.DBInstanceDescription)
+	}
+
+	tags = append(tags, "aliyun", "rds", aliyun.Code)
+
+	flow.AppendOutput(ctx, flow.NameValue{Name: "ALIYUN_RDS_INSTANCES", Value: ouputData, Tags: tags})
 
 	return
 }
@@ -63,7 +83,7 @@ func DescribeRDSInstances(ctx context.Context, conf config.Configuration) (err e
 func WaitForAllRDSRunning(ctx context.Context, conf config.Configuration) (err error) {
 	aliyun := NewAliyun(ctx, conf)
 
-	inst, err := aliyun.ListRDSInstance(nil)
+	inst, err := aliyun.listRDSInstance(nil)
 
 	if err != nil {
 		return
