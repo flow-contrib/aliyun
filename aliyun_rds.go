@@ -75,6 +75,11 @@ func (p *Aliyun) FindRDSInstance(engine, vpcName, vSwitchName, rdsName string) (
 	return
 }
 
+type CreateRDSInstancesArgs struct {
+	*rds.CreateDBInstanceRequest
+	Name string
+}
+
 func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceResponse, err error) {
 	rdssConf := p.Config.GetConfig("aliyun.rds")
 
@@ -82,7 +87,7 @@ func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceRespon
 		return
 	}
 
-	var args []*rds.CreateDBInstanceRequest
+	var args []*CreateRDSInstancesArgs
 
 	for _, rdsName := range rdssConf.Keys() {
 		rdsConf := rdssConf.GetConfig(rdsName)
@@ -146,7 +151,10 @@ func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceRespon
 		arg.SecurityIPList = rdsConf.GetString("security-ip-list", "172.18.0.0/24")
 		arg.PrivateIpAddress = rdsConf.GetString("private-ip-address", "")
 
-		args = append(args, arg)
+		args = append(args, &CreateRDSInstancesArgs{
+			CreateDBInstanceRequest: arg,
+			Name: rdsName,
+		})
 	}
 
 	var ret []*rds.CreateDBInstanceResponse
@@ -155,7 +163,7 @@ func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceRespon
 
 		var resp *rds.CreateDBInstanceResponse
 
-		resp, err = p.RDSClient().CreateDBInstance(arg)
+		resp, err = p.RDSClient().CreateDBInstance(arg.CreateDBInstanceRequest)
 
 		if err != nil {
 			return
@@ -171,6 +179,9 @@ func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceRespon
 
 		addTagsReq.Tag2Key = "creator"
 		addTagsReq.Tag2Value = "go-flow"
+
+		addTagsReq.Tag3Key = "name"
+		addTagsReq.Tag3Value = arg.Name
 
 		var oRdsClient *rds.Client
 		oRdsClient, err = rds.NewClientWithAccessKey(string(p.Region), p.AccessKeyId, p.AccessKeySecret)
