@@ -30,8 +30,6 @@ func CreateDockerCluster(ctx context.Context, conf config.Configuration) (err er
 
 	args, err := aliyun.CreateDockerClusterArgs()
 
-	fmt.Println("errr", err)
-
 	if err != nil {
 		return
 	}
