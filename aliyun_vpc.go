@@ -11,10 +11,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (p *Aliyun) describeVPCs() (resp *vpc.DescribeVpcsResponse, err error) {
+func (p *Aliyun) describeVPCs(vpcIds ...string) (resp *vpc.DescribeVpcsResponse, err error) {
 	describeReq := vpc.CreateDescribeVpcsRequest()
 
 	describeReq.RegionId = p.Region
+	describeReq.VpcId = strings.Join(vpcIds, ",")
 
 	resp, err = p.VPCClient().DescribeVpcs(describeReq)
 
@@ -44,7 +45,7 @@ func (p *Aliyun) describeVSwitches(vpcId string, switchIds ...string) (resp *vpc
 
 func (p *Aliyun) CreateVPCs() (err error) {
 
-	vpcsConf := p.Config.GetConfig("aliyun.vpc")
+	vpcsConf := p.Config.GetConfig("aliyun.vpc.vpc")
 
 	if vpcsConf.IsEmpty() {
 		return
@@ -117,7 +118,7 @@ func (p *Aliyun) CreateVPCs() (err error) {
 }
 
 func (p *Aliyun) DeleteVPC() (err error) {
-	vpcsConf := p.Config.GetConfig("aliyun.vpc")
+	vpcsConf := p.Config.GetConfig("aliyun.vpc.vpc")
 
 	if vpcsConf.IsEmpty() {
 		return
@@ -177,7 +178,7 @@ func (p *Aliyun) DeleteVPC() (err error) {
 
 func (p *Aliyun) WaitForAllVpcRunning(timeout int) (err error) {
 
-	vpcsConf := p.Config.GetConfig("aliyun.vpc")
+	vpcsConf := p.Config.GetConfig("aliyun.vpc.vpc")
 
 	if vpcsConf.IsEmpty() {
 		return
@@ -219,7 +220,7 @@ func (p *Aliyun) WaitForAllVpcRunning(timeout int) (err error) {
 	for i := 0; i < len(vpcIds); i++ {
 		go func(vpcId string) {
 			defer wg.Done()
-			p.WaitForVSwitchAvailable(p.Region, vpcId, timeout)
+			p.WaitForVpcAvailable(vpcId, timeout)
 		}(vpcIds[i])
 	}
 
@@ -253,6 +254,10 @@ func (p *Aliyun) FindVSwitch(vpcName, vSwitchName string) (ret *vpc.VSwitch, err
 		return
 	}
 
+	if vpcInst == nil {
+		return
+	}
+
 	vswitchesDescribe, err := p.describeVSwitches(vpcInst.VpcId)
 	if err != nil {
 		return
@@ -271,17 +276,17 @@ func (p *Aliyun) FindVSwitch(vpcName, vSwitchName string) (ret *vpc.VSwitch, err
 }
 
 func (p *Aliyun) CreateVSwitch() (err error) {
-	vpcsConf := p.Config.GetConfig("aliyun.vpc.vswitch")
+	vSwitchesConf := p.Config.GetConfig("aliyun.vpc.vswitch")
 
-	if vpcsConf.IsEmpty() {
+	if vSwitchesConf.IsEmpty() {
 		return
 	}
 
 	var createReqList []*vpc.CreateVSwitchRequest
 
-	for _, vSwitchName := range vpcsConf.Keys() {
+	for _, vSwitchName := range vSwitchesConf.Keys() {
 
-		vSwitchConf := vpcsConf.GetConfig(vSwitchName)
+		vSwitchConf := vSwitchesConf.GetConfig(vSwitchName)
 		vpcName := vSwitchConf.GetString("vpc-name")
 
 		if len(vpcName) == 0 {
@@ -299,7 +304,7 @@ func (p *Aliyun) CreateVSwitch() (err error) {
 		}
 
 		if vpcInst == nil {
-			err = fmt.Errorf("vswitch config of %s's vpc-name: %s is not found at aliyun", vpcName)
+			err = fmt.Errorf("vswitch config of %s's vpc-name: %s is not found at aliyun", vSwitchName, vpcName)
 			return
 		}
 
@@ -330,7 +335,12 @@ func (p *Aliyun) CreateVSwitch() (err error) {
 			continue
 		}
 
-		zoneId := vSwitchConf.GetString("zone-id", p.ZoneId)
+		zoneId := vSwitchConf.GetString("zone-id")
+
+		if len(zoneId) == 0 {
+			err = fmt.Errorf("the config of zone-id is empty in vswitch of %s", vSwitchName)
+			return
+		}
 
 		if len(zoneId) > 0 {
 			if !strings.HasPrefix(zoneId, string(p.Region)) {
@@ -419,6 +429,34 @@ func (p *Aliyun) DeleteVSwitch() (err error) {
 	}
 
 	return
+}
+
+func (p *Aliyun) WaitForVpcAvailable(vpcId string, timeout int) (err error) {
+	if timeout <= 0 {
+		timeout = 60
+	}
+
+	for {
+		var resp *vpc.DescribeVpcsResponse
+		resp, err = p.describeVPCs(vpcId)
+		if err != nil {
+			return err
+		}
+
+		if len(resp.Vpcs.Vpc) > 0 && resp.Vpcs.Vpc[0].Status == "Available" {
+			break
+		}
+
+		timeout = timeout - 5
+
+		if timeout <= 0 {
+			err = fmt.Errorf("wait for vpc '%s' available timeout", vpcId)
+			return
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+	return nil
 }
 
 func (p *Aliyun) WaitForVSwitchAvailable(vpcId string, vswitchId string, timeout int) (err error) {
