@@ -8,8 +8,7 @@ import (
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
-
-	"github.com/denverdino/aliyungo/ecs"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
 
 	"github.com/sirupsen/logrus"
 )
@@ -141,7 +140,7 @@ func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceRespon
 			continue
 		}
 
-		var vSwitch *ecs.VSwitchSetType
+		var vSwitch *vpc.VSwitch
 		vSwitch, err = p.FindVSwitch(vpcName, vSwitchName)
 
 		if err != nil {
@@ -394,7 +393,7 @@ func (p *Aliyun) DeleteRDSInstances() (err error) {
 			continue
 		}
 
-		var vSwitch *ecs.VSwitchSetType
+		var vSwitch *vpc.VSwitch
 		vSwitch, err = p.FindVSwitch(vpcName, vSwitchName)
 
 		if err != nil {

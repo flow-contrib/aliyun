@@ -3,6 +3,8 @@ package aliyun
 import (
 	"fmt"
 
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
+
 	"github.com/denverdino/aliyungo/cs"
 	"github.com/denverdino/aliyungo/ecs"
 	"github.com/sirupsen/logrus"
@@ -83,7 +85,7 @@ func (p *Aliyun) CreateDockerClusterArgs() (createArgs []*cs.ClusterCreationArgs
 			return
 		}
 
-		var vSwitch *ecs.VSwitchSetType
+		var vSwitch *vpc.VSwitch
 		vSwitch, err = p.FindVSwitch(vpcName, vSwitchName)
 		if err != nil {
 			return
@@ -166,7 +168,7 @@ func (p *Aliyun) DeleteDockerClusterArgs() (clusters []*cs.ClusterType, err erro
 			return
 		}
 
-		var vSwitch *ecs.VSwitchSetType
+		var vSwitch *vpc.VSwitch
 		vSwitch, err = p.FindVSwitch(vpcName, vSwitchName)
 		if err != nil {
 			return

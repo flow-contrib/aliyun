@@ -5,7 +5,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/denverdino/aliyungo/common"
 	"github.com/denverdino/aliyungo/cs"
+
 	"github.com/gogap/config"
 	"github.com/gogap/context"
 	"github.com/gogap/flow"
@@ -37,7 +39,7 @@ func CreateDockerCluster(ctx context.Context, conf config.Configuration) (err er
 	for _, arg := range args {
 
 		var resp cs.ClusterCreationResponse
-		resp, err = aliyun.CSClient().CreateCluster(aliyun.Region, arg)
+		resp, err = aliyun.CSClient().CreateCluster(common.Region(aliyun.Region), arg)
 
 		if err != nil {
 			return

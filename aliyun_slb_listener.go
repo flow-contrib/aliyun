@@ -6,6 +6,8 @@ import (
 
 	"github.com/denverdino/aliyungo/slb"
 	"github.com/sirupsen/logrus"
+
+	"github.com/denverdino/aliyungo/common"
 )
 
 type CreateLoadBalancerHTTPListenerArgs struct {
@@ -538,7 +540,7 @@ func (p *Aliyun) CreateSLBHTTPListenerRuleArgs() (createArgs []*slb.CreateRulesA
 			}
 
 			var vSrvGroupsResp *slb.DescribeVServerGroupsResponse
-			vSrvGroupsResp, err = p.SLBClient().DescribeVServerGroups(&slb.DescribeVServerGroupsArgs{slbInstance.LoadBalancerId, p.Region})
+			vSrvGroupsResp, err = p.SLBClient().DescribeVServerGroups(&slb.DescribeVServerGroupsArgs{slbInstance.LoadBalancerId, common.Region(p.Region)})
 			if err != nil {
 				return
 			}
@@ -556,7 +558,7 @@ func (p *Aliyun) CreateSLBHTTPListenerRuleArgs() (createArgs []*slb.CreateRulesA
 
 			var ruleDescribRep *slb.DescribeRulesResponse
 			ruleDescribRep, err = p.SLBClient().DescribeRules(&slb.DescribeRulesArgs{
-				RegionId:       p.Region,
+				RegionId:       common.Region(p.Region),
 				LoadBalancerId: slbInstance.LoadBalancerId,
 				ListenerPort:   port,
 			})
@@ -614,7 +616,7 @@ func (p *Aliyun) CreateSLBHTTPListenerRuleArgs() (createArgs []*slb.CreateRulesA
 			}
 
 			arg := &slb.CreateRulesArgs{
-				RegionId:       p.Region,
+				RegionId:       common.Region(p.Region),
 				LoadBalancerId: slbInstance.LoadBalancerId,
 				ListenerPort:   port,
 				RuleList:       string(ruleData),

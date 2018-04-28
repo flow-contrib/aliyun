@@ -3,7 +3,10 @@ package aliyun
 import (
 	"fmt"
 
+	"github.com/denverdino/aliyungo/common"
 	"github.com/denverdino/aliyungo/ecs"
+
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
 )
 
 type SearchECSInstanceArgs struct {
@@ -23,7 +26,7 @@ func (p *Aliyun) FindECSInstance(arg *SearchECSInstanceArgs) (inst *ecs.Instance
 
 	if len(arg.vpcId)+len(arg.vswitchId) == 0 {
 		if len(arg.VPCName) > 0 && len(arg.VSwitchName) > 0 {
-			var vSwitch *ecs.VSwitchSetType
+			var vSwitch *vpc.VSwitch
 			vSwitch, err = p.FindVSwitch(arg.VPCName, arg.VSwitchName)
 			if err != nil {
 				return
@@ -38,7 +41,7 @@ func (p *Aliyun) FindECSInstance(arg *SearchECSInstanceArgs) (inst *ecs.Instance
 
 	instances, _, err := p.ECSClient().DescribeInstances(
 		&ecs.DescribeInstancesArgs{
-			RegionId:            p.Region,
+			RegionId:            common.Region(p.Region),
 			InstanceIds:         arg.InstanceId,
 			InstanceName:        arg.InstanceName,
 			InstanceNetworkType: arg.NetworkType,

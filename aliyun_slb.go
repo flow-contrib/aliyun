@@ -3,9 +3,12 @@ package aliyun
 import (
 	"fmt"
 
-	"github.com/denverdino/aliyungo/ecs"
 	"github.com/denverdino/aliyungo/slb"
 	"github.com/sirupsen/logrus"
+
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
+
+	"github.com/denverdino/aliyungo/common"
 )
 
 func (p *Aliyun) ListLoadBalancers(details bool) (val map[string]*slb.LoadBalancerType, err error) {
@@ -30,7 +33,7 @@ func (p *Aliyun) ListLoadBalancers(details bool) (val map[string]*slb.LoadBalanc
 
 	lbs, err := p.SLBClient().DescribeLoadBalancers(
 		&slb.DescribeLoadBalancersArgs{
-			RegionId: p.Region,
+			RegionId: common.Region(p.Region),
 		},
 	)
 
@@ -93,7 +96,7 @@ func (p *Aliyun) CreateLoadBalancerArgs() (createArgs []*slb.CreateLoadBalancerA
 
 			logrus.WithField("CODE", p.Code).
 				WithField("SLB-NAME", needCreateSLBName).
-				WithField("REGION", p.Region).
+				WithField("REGION", common.Region(p.Region)).
 				Infoln("SLB already created")
 
 			continue
@@ -113,7 +116,7 @@ func (p *Aliyun) CreateLoadBalancerArgs() (createArgs []*slb.CreateLoadBalancerA
 				err = fmt.Errorf("slb config of %s's vpc-name or vswitch-name is empty", needCreateSLBName)
 				return
 			} else {
-				var vSwitch *ecs.VSwitchSetType
+				var vSwitch *vpc.VSwitch
 				vSwitch, err = p.FindVSwitch(vpcName, vSwitchName)
 
 				if err != nil {
@@ -132,7 +135,7 @@ func (p *Aliyun) CreateLoadBalancerArgs() (createArgs []*slb.CreateLoadBalancerA
 		bandWidth := slbConf.GetInt64("band-width", 100)
 
 		arg := &slb.CreateLoadBalancerArgs{
-			RegionId:           p.Region,
+			RegionId:           common.Region(p.Region),
 			LoadBalancerName:   needCreateSLBName,
 			AddressType:        slb.AddressType(addressType),
 			VSwitchId:          vSwitchId,

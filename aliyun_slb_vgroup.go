@@ -7,6 +7,8 @@ import (
 	"github.com/denverdino/aliyungo/ecs"
 	"github.com/denverdino/aliyungo/slb"
 	"github.com/sirupsen/logrus"
+
+	"github.com/denverdino/aliyungo/common"
 )
 
 func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupArgs, err error) {
@@ -43,7 +45,7 @@ func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupA
 		var existGroups *slb.DescribeVServerGroupsResponse
 		existGroups, err = p.SLBClient().DescribeVServerGroups(&slb.DescribeVServerGroupsArgs{
 			LoadBalancerId: lb.LoadBalancerId,
-			RegionId:       p.Region,
+			RegionId:       common.Region(p.Region),
 		})
 
 		if err != nil {
@@ -103,7 +105,7 @@ func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupA
 				}
 
 				if inst == nil {
-					err = fmt.Errorf("instance not found: %s.%s.%s", balancerName, groupName, srv)
+					err = fmt.Errorf("instance '%s' not found: %s.%s.%s, tags: %#v", serarchConf.GetString("name"), balancerName, groupName, srv, tag)
 					return
 				}
 
@@ -131,7 +133,7 @@ func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupA
 
 				arg := &slb.CreateVServerGroupArgs{
 					LoadBalancerId:   lb.LoadBalancerId,
-					RegionId:         p.Region,
+					RegionId:         common.Region(p.Region),
 					VServerGroupName: groupName,
 					BackendServers:   string(srvData),
 				}
