@@ -2,6 +2,7 @@ package aliyun
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/gogap/config"
@@ -70,7 +71,9 @@ func DescribeRDSInstances(ctx context.Context, conf config.Configuration) (err e
 	var tags []string
 
 	for _, inst := range insts {
-		tags = append(tags, inst.DBInstanceDescription)
+		tags = append(tags, inst.Name)
+		setENV(fmt.Sprintf("rds_db_%s_host", inst.Name), inst.ConnectionString)
+		setENV(fmt.Sprintf("rds_db_%s_port", inst.Name), inst.Port)
 	}
 
 	tags = append(tags, "aliyun", "rds", aliyun.Code)

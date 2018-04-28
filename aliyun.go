@@ -152,3 +152,14 @@ func IsAliErrCode(err error, code string) bool {
 
 	return false
 }
+
+func setENV(key, value string) error {
+	key = strings.Replace(key, "-", "_", -1)
+	key = strings.Replace(key, ".", "_", -1)
+	key = strings.Replace(key, " ", "_", -1)
+	key = strings.Replace(key, ":", "_", -1)
+	key = strings.ToUpper(key)
+	key = "ENV_ALIYUN_" + key
+
+	return os.Setenv(key, value)
+}

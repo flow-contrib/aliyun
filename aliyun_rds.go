@@ -44,10 +44,20 @@ func (p *Aliyun) listRDSInstance(tags map[string]string) (resp *rds.DescribeDBIn
 	return
 }
 
-func (p *Aliyun) DescribeRDSInstancesAttr() (attr []rds.DBInstanceAttribute, err error) {
+type DBInstanceAttribute struct {
+	Name string
+	rds.DBInstanceAttribute
+	Tags map[string]string
+}
+
+func (p *Aliyun) DescribeRDSInstancesAttr() (attr []DBInstanceAttribute, err error) {
 
 	resp, err := p.listRDSInstance(nil)
 	if err != nil {
+		return
+	}
+
+	if len(resp.Items.DBInstance) == 0 {
 		return
 	}
 
@@ -69,7 +79,47 @@ func (p *Aliyun) DescribeRDSInstancesAttr() (attr []rds.DBInstanceAttribute, err
 		return
 	}
 
-	return attrResp.Items.DBInstanceAttribute, nil
+	var ret []DBInstanceAttribute
+
+	for i, attr := range attrResp.Items.DBInstanceAttribute {
+
+		tagsReq := rds.CreateDescribeTagsRequest()
+		tagsReq.RegionId = p.Region
+		tagsReq.DBInstanceId = attr.DBInstanceId
+
+		var mapTags map[string]string
+
+		tagsResp, e := p.RDSClient().DescribeTags(tagsReq)
+		if e == nil && len(tagsResp.Items.TagInfos) > 0 {
+			mapTags = make(map[string]string)
+			for i := 0; i < len(tagsResp.Items.TagInfos); i++ {
+				mapTags[tagsResp.Items.TagInfos[i].TagKey] = tagsResp.Items.TagInfos[i].TagValue
+			}
+		}
+
+		item := DBInstanceAttribute{
+			DBInstanceAttribute: attrResp.Items.DBInstanceAttribute[i],
+			Tags:                mapTags,
+		}
+
+		for k, v := range mapTags {
+			if k == "name" {
+				item.Name = v
+				break
+			}
+		}
+
+		if len(item.Name) == 0 {
+			item.Name = attr.DBInstanceDescription
+		}
+
+		ret = append(ret, item)
+
+		// setENV(fmt.Sprintf("rds_%s_host", name), attr.ConnectionString)
+		// setENV(fmt.Sprintf("rds_%s_port", name), attr.Port)
+	}
+
+	return ret, nil
 }
 
 func (p *Aliyun) FindRDSInstance(engine, vpcName, vSwitchName, rdsName string) (attrs *rds.DBInstance, err error) {
