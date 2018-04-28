@@ -81,24 +81,16 @@ func (p *Aliyun) DescribeRDSInstancesAttr() (attr []DBInstanceAttribute, err err
 
 	var ret []DBInstanceAttribute
 
-	for i, attr := range attrResp.Items.DBInstanceAttribute {
+	for _, attr := range attrResp.Items.DBInstanceAttribute {
 
 		tagsReq := rds.CreateDescribeTagsRequest()
 		tagsReq.RegionId = p.Region
 		tagsReq.DBInstanceId = attr.DBInstanceId
 
-		var mapTags map[string]string
-
-		tagsResp, e := p.RDSClient().DescribeTags(tagsReq)
-		if e == nil && len(tagsResp.Items.TagInfos) > 0 {
-			mapTags = make(map[string]string)
-			for i := 0; i < len(tagsResp.Items.TagInfos); i++ {
-				mapTags[tagsResp.Items.TagInfos[i].TagKey] = tagsResp.Items.TagInfos[i].TagValue
-			}
-		}
+		mapTags := p.getInstanceTags(attr.DBInstanceId)
 
 		item := DBInstanceAttribute{
-			DBInstanceAttribute: attrResp.Items.DBInstanceAttribute[i],
+			DBInstanceAttribute: attr,
 			Tags:                mapTags,
 		}
 
@@ -114,9 +106,6 @@ func (p *Aliyun) DescribeRDSInstancesAttr() (attr []DBInstanceAttribute, err err
 		}
 
 		ret = append(ret, item)
-
-		// setENV(fmt.Sprintf("rds_%s_host", name), attr.ConnectionString)
-		// setENV(fmt.Sprintf("rds_%s_port", name), attr.Port)
 	}
 
 	return ret, nil
@@ -482,14 +471,137 @@ func (p *Aliyun) DeleteRDSInstances() (err error) {
 	return
 }
 
-// Default timeout value for WaitForInstance method
-const InstanceDefaultTimeout = 120
-const DefaultWaitForInterval = 10
+func (p *Aliyun) AllocateInstancePublicConnection() (err error) {
+	rdsInst, err := p.DescribeRDSInstancesAttr()
+	if err != nil {
+		return
+	}
+
+	for _, inst := range rdsInst {
+		req := rds.CreateAllocateInstancePublicConnectionRequest()
+
+		req.DBInstanceId = inst.DBInstanceId
+		req.Port = inst.Port
+		req.ConnectionStringPrefix = fmt.Sprintf("o-%s", inst.DBInstanceId)
+
+		_, err = p.RDSClient().AllocateInstancePublicConnection(req)
+
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func (p *Aliyun) ReleaseInstancePublicConnection() (err error) {
+	rdsInst, err := p.DescribeRDSInstancesAttr()
+	if err != nil {
+		return
+	}
+
+	for _, inst := range rdsInst {
+		req := rds.CreateReleaseInstancePublicConnectionRequest()
+
+		req.DBInstanceId = inst.DBInstanceId
+		req.CurrentConnectionString = fmt.Sprintf("o-%s", inst.DBInstanceId)
+
+		_, err = p.RDSClient().ReleaseInstancePublicConnection(req)
+
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+type RDSDBInstanceNetInfo struct {
+	InstanceId   string
+	InstanceName string
+	NetInfo      []rds.DBInstanceNetInfo
+	Tags         map[string]string
+}
+
+func (p *Aliyun) DescribeDBInstanceNetInfo() (instNetInfos []RDSDBInstanceNetInfo, err error) {
+
+	insts, err := p.listRDSInstance(nil)
+	if err != nil {
+		return
+	}
+
+	if insts == nil {
+		return
+	}
+
+	if len(insts.Items.DBInstance) == 0 {
+		return
+	}
+
+	var ret []RDSDBInstanceNetInfo
+
+	for _, inst := range insts.Items.DBInstance {
+
+		req := rds.CreateDescribeDBInstanceNetInfoRequest()
+		req.DBInstanceId = inst.DBInstanceId
+
+		var resp *rds.DescribeDBInstanceNetInfoResponse
+		resp, err = p.RDSClient().DescribeDBInstanceNetInfo(req)
+
+		if err != nil {
+			return
+		}
+
+		tags := p.getInstanceTags(inst.DBInstanceId)
+
+		name := ""
+		for k, v := range tags {
+			if k == "name" {
+				name = v
+				break
+			}
+		}
+
+		if len(name) == 0 {
+			name = inst.DBInstanceDescription
+		}
+
+		ret = append(ret, RDSDBInstanceNetInfo{
+			InstanceId:   inst.DBInstanceId,
+			InstanceName: name,
+			NetInfo:      resp.DBInstanceNetInfos.DBInstanceNetInfo,
+			Tags:         tags,
+		})
+
+	}
+
+	instNetInfos = ret
+
+	return
+}
+
+func (p *Aliyun) getInstanceTags(dbInstanceId string) map[string]string {
+
+	tagsReq := rds.CreateDescribeTagsRequest()
+	tagsReq.RegionId = p.Region
+	tagsReq.DBInstanceId = dbInstanceId
+
+	var mapTags map[string]string
+
+	tagsResp, e := p.RDSClient().DescribeTags(tagsReq)
+	if e == nil && len(tagsResp.Items.TagInfos) > 0 {
+		mapTags = make(map[string]string)
+		for i := 0; i < len(tagsResp.Items.TagInfos); i++ {
+			mapTags[tagsResp.Items.TagInfos[i].TagKey] = tagsResp.Items.TagInfos[i].TagValue
+		}
+	}
+
+	return mapTags
+}
 
 // WaitForInstance waits for instance to given status
 func (p *Aliyun) WaitForDBInstance(instanceId string, status string, timeout int) error {
 	if timeout <= 0 {
-		timeout = InstanceDefaultTimeout
+		timeout = 120
 	}
 	for {
 
@@ -508,8 +620,8 @@ func (p *Aliyun) WaitForDBInstance(instanceId string, status string, timeout int
 			return err
 		}
 
-		timeout = timeout - DefaultWaitForInterval
-		time.Sleep(DefaultWaitForInterval * time.Second)
+		timeout = timeout - 5
+		time.Sleep(5 * time.Second)
 
 		if len(resp.Items.DBInstance) < 1 {
 			continue
