@@ -7,11 +7,11 @@ import (
 )
 
 func init() {
-	flow.RegisterHandler("devops.aliyun.ecs.vpc.create", CreateVPC)
-	flow.RegisterHandler("devops.aliyun.ecs.vpc.delete", DeleteVPC)
-	flow.RegisterHandler("devops.aliyun.ecs.vpc.running.wait", WaitForAllVpcRunning)
-	flow.RegisterHandler("devops.aliyun.ecs.vswitch.create", CreateVSwitch)
-	flow.RegisterHandler("devops.aliyun.ecs.vswitch.delete", DeleteVSwitch)
+	flow.RegisterHandler("devops.aliyun.vpc.vpc.create", CreateVPC)
+	flow.RegisterHandler("devops.aliyun.vpc.vpc.delete", DeleteVPC)
+	flow.RegisterHandler("devops.aliyun.vpc.running.wait", WaitForAllVpcRunning)
+	flow.RegisterHandler("devops.aliyun.vpc.vswitch.create", CreateVSwitch)
+	flow.RegisterHandler("devops.aliyun.vpc.vswitch.delete", DeleteVSwitch)
 }
 
 func CreateVPC(ctx context.Context, conf config.Configuration) (err error) {
@@ -30,7 +30,7 @@ func DeleteVPC(ctx context.Context, conf config.Configuration) (err error) {
 
 	aliyun := NewAliyun(ctx, conf)
 
-	err = aliyun.DeleteVPCArgs()
+	err = aliyun.DeleteVPC()
 	if err != nil {
 		return
 	}
@@ -65,7 +65,7 @@ func DeleteVSwitch(ctx context.Context, conf config.Configuration) (err error) {
 
 	aliyun := NewAliyun(ctx, conf)
 
-	err = aliyun.DeleteVSwitchArgs()
+	err = aliyun.DeleteVSwitch()
 	if err != nil {
 		return
 	}

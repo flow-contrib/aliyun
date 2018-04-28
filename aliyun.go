@@ -7,10 +7,11 @@ import (
 	"github.com/denverdino/aliyungo/common"
 	"github.com/denverdino/aliyungo/cs"
 	"github.com/denverdino/aliyungo/ecs"
-	"github.com/denverdino/aliyungo/oss"
 	"github.com/denverdino/aliyungo/slb"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 
 	"github.com/gogap/config"
 	"github.com/gogap/context"
@@ -21,10 +22,11 @@ type Aliyun struct {
 
 	AccessKeyId     string
 	AccessKeySecret string
-	Region          common.Region
+	Region          string
 	Code            string
 	ZoneId          string
 
+	vpcClient *vpc.Client
 	ecsClient *ecs.Client
 	ossClient *oss.Client
 	rdsClient *rds.Client
@@ -54,7 +56,7 @@ func NewAliyun(ctx context.Context, conf config.Configuration) *Aliyun {
 
 		AccessKeyId:     akId,
 		AccessKeySecret: akSecret,
-		Region:          common.Region(region),
+		Region:          region,
 		ZoneId:          zoneId,
 		Code:            code,
 	}
@@ -72,7 +74,12 @@ func (p *Aliyun) ECSClient() *ecs.Client {
 
 func (p *Aliyun) OSSClient() *oss.Client {
 	if p.ossClient == nil {
-		p.ossClient = oss.NewOSSClient(oss.Region("oss-"+string(p.Region)), false, p.AccessKeyId, p.AccessKeySecret, true)
+		endpoint := fmt.Sprintf("oss-%s.aliyuncs.com", p.Region)
+		var err error
+		p.ossClient, err = oss.New(endpoint, p.AccessKeyId, p.AccessKeySecret)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	return p.ossClient
@@ -81,13 +88,25 @@ func (p *Aliyun) OSSClient() *oss.Client {
 func (p *Aliyun) RDSClient() *rds.Client {
 	if p.rdsClient == nil {
 		var err error
-		p.rdsClient, err = rds.NewClientWithAccessKey(string(p.Region), p.AccessKeyId, p.AccessKeySecret)
+		p.rdsClient, err = rds.NewClientWithAccessKey(p.Region, p.AccessKeyId, p.AccessKeySecret)
 		if err != nil {
 			panic(err)
 		}
 	}
 
 	return p.rdsClient
+}
+
+func (p *Aliyun) VPCClient() *vpc.Client {
+	if p.vpcClient == nil {
+		var err error
+		p.vpcClient, err = vpc.NewClientWithAccessKey(p.Region, p.AccessKeyId, p.AccessKeySecret)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return p.vpcClient
 }
 
 func (p *Aliyun) CSClient() *cs.Client {
@@ -100,7 +119,7 @@ func (p *Aliyun) CSClient() *cs.Client {
 
 func (p *Aliyun) SLBClient() *slb.Client {
 	if p.slbClient == nil {
-		p.slbClient = slb.NewSLBClient(p.AccessKeyId, p.AccessKeySecret, p.Region)
+		p.slbClient = slb.NewSLBClient(p.AccessKeyId, p.AccessKeySecret, common.Region(p.Region))
 	}
 	return p.slbClient
 }

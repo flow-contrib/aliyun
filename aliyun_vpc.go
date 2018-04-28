@@ -4,31 +4,59 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/denverdino/aliyungo/common"
-	"github.com/denverdino/aliyungo/ecs"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
+
 	"github.com/sirupsen/logrus"
 )
 
-func (p *Aliyun) CreateVPCs() (err error) {
+func (p *Aliyun) describeVPCs() (resp *vpc.DescribeVpcsResponse, err error) {
+	describeReq := vpc.CreateDescribeVpcsRequest()
 
-	vpcsConf := p.Config.GetConfig("aliyun.ecs.vpc")
+	describeReq.RegionId = p.Region
 
-	if vpcsConf.IsEmpty() {
-		return
-	}
-
-	var sets []ecs.VpcSetType
-	sets, _, err = p.ECSClient().DescribeVpcs(
-		&ecs.DescribeVpcsArgs{
-			RegionId: common.Region(p.Region),
-		})
+	resp, err = p.VPCClient().DescribeVpcs(describeReq)
 
 	if err != nil {
 		return
 	}
 
-	var args []*ecs.CreateVpcArgs
+	return
+}
+
+func (p *Aliyun) describeVSwitches(vpcId string, switchIds ...string) (resp *vpc.DescribeVSwitchesResponse, err error) {
+
+	describeReq := vpc.CreateDescribeVSwitchesRequest()
+
+	describeReq.RegionId = p.Region
+	describeReq.VpcId = vpcId
+
+	describeReq.VSwitchId = strings.Join(switchIds, ",")
+
+	resp, err = p.VPCClient().DescribeVSwitches(describeReq)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func (p *Aliyun) CreateVPCs() (err error) {
+
+	vpcsConf := p.Config.GetConfig("aliyun.vpc")
+
+	if vpcsConf.IsEmpty() {
+		return
+	}
+
+	vpcDescribeResp, err := p.describeVPCs()
+
+	if err != nil {
+		return
+	}
+
+	var createReqList []*vpc.CreateVpcRequest
 
 	for _, vpcName := range vpcsConf.Keys() {
 
@@ -44,17 +72,17 @@ func (p *Aliyun) CreateVPCs() (err error) {
 
 		desc := vpcConf.GetString("description")
 
-		arg := &ecs.CreateVpcArgs{
-			RegionId:    common.Region(p.Region),
-			VpcName:     vpcName,
-			CidrBlock:   vpcConf.GetString("cidr-block", "172.16.0.0/16"),
-			Description: p.signWithCode(desc),
-		}
+		req := vpc.CreateCreateVpcRequest()
 
-		for _, s := range sets {
-			if s.VpcName == arg.VpcName &&
-				s.CidrBlock == arg.CidrBlock &&
-				s.RegionId == arg.RegionId &&
+		req.RegionId = p.Region
+		req.VpcName = vpcName
+		req.CidrBlock = vpcConf.GetString("cidr-block", "172.16.0.0/16")
+		req.Description = p.signWithCode(desc)
+
+		for _, s := range vpcDescribeResp.Vpcs.Vpc {
+			if s.VpcName == req.VpcName &&
+				s.CidrBlock == req.CidrBlock &&
+				s.RegionId == req.RegionId &&
 				p.isSignd(s.Description) {
 
 				created = true
@@ -68,12 +96,12 @@ func (p *Aliyun) CreateVPCs() (err error) {
 			continue
 		}
 
-		args = append(args, arg)
+		createReqList = append(createReqList, req)
 	}
 
-	for _, arg := range args {
+	for _, arg := range createReqList {
 
-		resp, e := p.ECSClient().CreateVpc(arg)
+		resp, e := p.VPCClient().CreateVpc(arg)
 		if e != nil {
 			return e
 		}
@@ -88,23 +116,20 @@ func (p *Aliyun) CreateVPCs() (err error) {
 	return
 }
 
-func (p *Aliyun) DeleteVPCArgs() (err error) {
-	vpcsConf := p.Config.GetConfig("aliyun.ecs.vpc")
+func (p *Aliyun) DeleteVPC() (err error) {
+	vpcsConf := p.Config.GetConfig("aliyun.vpc")
 
 	if vpcsConf.IsEmpty() {
 		return
 	}
 
-	var args []*ecs.DeleteVpcArgs
-
-	var sets []ecs.VpcSetType
-	sets, _, err = p.ECSClient().DescribeVpcs(&ecs.DescribeVpcsArgs{
-		RegionId: common.Region(p.Region),
-	})
+	vpcDescribeResp, err := p.describeVPCs()
 
 	if err != nil {
 		return
 	}
+
+	var deleteReqList []*vpc.DeleteVpcRequest
 
 	for _, vpcName := range vpcsConf.Keys() {
 
@@ -113,7 +138,7 @@ func (p *Aliyun) DeleteVPCArgs() (err error) {
 		vpcId := vpcConf.GetString("id")
 
 		if len(vpcId) == 0 {
-			for _, s := range sets {
+			for _, s := range vpcDescribeResp.Vpcs.Vpc {
 				if s.CidrBlock == vpcConf.GetString("cidr-block", "172.16.0.0/16") &&
 					s.RegionId == p.Region &&
 					s.VpcName == vpcName &&
@@ -127,23 +152,23 @@ func (p *Aliyun) DeleteVPCArgs() (err error) {
 		}
 
 		if len(vpcId) > 0 {
-			arg := &ecs.DeleteVpcArgs{
-				VpcId: vpcId,
-			}
+			req := vpc.CreateDeleteVpcRequest()
 
-			args = append(args, arg)
+			req.VpcId = vpcId
+
+			deleteReqList = append(deleteReqList, req)
 		}
 	}
 
-	for _, arg := range args {
+	for _, req := range deleteReqList {
 
-		err = p.ECSClient().DeleteVpc(arg.VpcId)
+		_, err = p.VPCClient().DeleteVpc(req)
 		if err != nil {
 			return
 		}
 
 		logrus.WithField("CODE", p.Code).
-			WithField("ECS-VPC-ID", arg.VpcId).
+			WithField("ECS-VPC-ID", req.VpcId).
 			Infoln("VPC deleted")
 	}
 
@@ -152,17 +177,13 @@ func (p *Aliyun) DeleteVPCArgs() (err error) {
 
 func (p *Aliyun) WaitForAllVpcRunning(timeout int) (err error) {
 
-	vpcsConf := p.Config.GetConfig("aliyun.ecs.vpc")
+	vpcsConf := p.Config.GetConfig("aliyun.vpc")
 
 	if vpcsConf.IsEmpty() {
 		return
 	}
 
-	var sets []ecs.VpcSetType
-	sets, _, err = p.ECSClient().DescribeVpcs(
-		&ecs.DescribeVpcsArgs{
-			RegionId: common.Region(p.Region),
-		})
+	vpcDescribeResp, err := p.describeVPCs()
 
 	if err != nil {
 		return
@@ -170,7 +191,7 @@ func (p *Aliyun) WaitForAllVpcRunning(timeout int) (err error) {
 
 	mapVpcs := map[string]string{}
 
-	for _, s := range sets {
+	for _, s := range vpcDescribeResp.Vpcs.Vpc {
 		mapVpcs[s.VpcName] = s.VpcId
 	}
 
@@ -198,7 +219,7 @@ func (p *Aliyun) WaitForAllVpcRunning(timeout int) (err error) {
 	for i := 0; i < len(vpcIds); i++ {
 		go func(vpcId string) {
 			defer wg.Done()
-			p.ECSClient().WaitForVpcAvailable(common.Region(p.Region), vpcId, timeout)
+			p.WaitForVSwitchAvailable(p.Region, vpcId, timeout)
 		}(vpcIds[i])
 	}
 
@@ -209,22 +230,14 @@ func (p *Aliyun) WaitForAllVpcRunning(timeout int) (err error) {
 	return
 }
 
-func (p *Aliyun) FindVPC(vpcName string) (ret *ecs.VpcSetType, err error) {
-	var vpcSets []ecs.VpcSetType
-	vpcSets, _, err = p.ECSClient().DescribeVpcs(
-		&ecs.DescribeVpcsArgs{
-			RegionId: common.Region(p.Region),
-		})
+func (p *Aliyun) FindVPC(vpcName string) (ret *vpc.Vpc, err error) {
+	vpcDescribeResp, err := p.describeVPCs()
 
-	if err != nil {
-		return
-	}
-
-	for i, vpc := range vpcSets {
+	for i, vpc := range vpcDescribeResp.Vpcs.Vpc {
 		if vpcName == vpc.VpcName &&
 			p.isSignd(vpc.Description) {
 
-			ret = &vpcSets[i]
+			ret = &vpcDescribeResp.Vpcs.Vpc[i]
 			return
 		}
 	}
@@ -232,36 +245,25 @@ func (p *Aliyun) FindVPC(vpcName string) (ret *ecs.VpcSetType, err error) {
 	return
 }
 
-func (p *Aliyun) FindVSwitch(vpcName, vSwitchName string) (ret *ecs.VSwitchSetType, err error) {
+func (p *Aliyun) FindVSwitch(vpcName, vSwitchName string) (ret *vpc.VSwitch, err error) {
 
-	vpc, err := p.FindVPC(vpcName)
+	vpcInst, err := p.FindVPC(vpcName)
 
 	if err != nil {
 		return
 	}
 
-	if vpc == nil {
+	vswitchesDescribe, err := p.describeVSwitches(vpcInst.VpcId)
+	if err != nil {
 		return
 	}
 
-	for _, vswitchId := range vpc.VSwitchIds.VSwitchId {
-		var vSwitchSets []ecs.VSwitchSetType
+	for i, vswitch := range vswitchesDescribe.VSwitches.VSwitch {
+		if vswitch.VSwitchName == vSwitchName &&
+			p.isSignd(vswitch.Description) {
 
-		vSwitchSets, _, err = p.ECSClient().DescribeVSwitches(
-			&ecs.DescribeVSwitchesArgs{
-				RegionId:  common.Region(p.Region),
-				VpcId:     vpc.VpcId,
-				VSwitchId: vswitchId,
-			},
-		)
-
-		for i, vswitch := range vSwitchSets {
-			if vswitch.VSwitchName == vSwitchName &&
-				p.isSignd(vswitch.Description) {
-
-				ret = &vSwitchSets[i]
-				return
-			}
+			ret = &vswitchesDescribe.VSwitches.VSwitch[i]
+			return
 		}
 	}
 
@@ -269,13 +271,13 @@ func (p *Aliyun) FindVSwitch(vpcName, vSwitchName string) (ret *ecs.VSwitchSetTy
 }
 
 func (p *Aliyun) CreateVSwitch() (err error) {
-	vpcsConf := p.Config.GetConfig("aliyun.ecs.vswitch")
+	vpcsConf := p.Config.GetConfig("aliyun.vpc.vswitch")
 
 	if vpcsConf.IsEmpty() {
 		return
 	}
 
-	var args []*ecs.CreateVSwitchArgs
+	var createReqList []*vpc.CreateVSwitchRequest
 
 	for _, vSwitchName := range vpcsConf.Keys() {
 
@@ -289,30 +291,30 @@ func (p *Aliyun) CreateVSwitch() (err error) {
 
 		vpcId := ""
 
-		var vpc *ecs.VpcSetType
-		vpc, err = p.FindVPC(vpcName)
+		var vpcInst *vpc.Vpc
+		vpcInst, err = p.FindVPC(vpcName)
 
 		if err != nil {
 			return
 		}
 
-		if vpc == nil {
+		if vpcInst == nil {
 			err = fmt.Errorf("vswitch config of %s's vpc-name: %s is not found at aliyun", vpcName)
 			return
 		}
 
-		vpcId = vpc.VpcId
+		vpcId = vpcInst.VpcId
 
 		logrus.WithField("CODE", p.Code).
 			WithField("VPCID", vpcId).
-			WithField("VSWITCH", vSwitchName).Infof("Found vswitch @ %s", vpc.VpcId)
+			WithField("VSWITCH", vSwitchName).Infof("Found vswitch @ %s", vpcInst.VpcId)
 
 		if len(vpcId) == 0 {
 			err = fmt.Errorf("vswitch config of %s's vpc-name: %s is not found at aliyun", vSwitchName, vpcName)
 			return
 		}
 
-		var vSwitch *ecs.VSwitchSetType
+		var vSwitch *vpc.VSwitch
 		vSwitch, err = p.FindVSwitch(vpcName, vSwitchName)
 		if err != nil {
 			return
@@ -340,40 +342,41 @@ func (p *Aliyun) CreateVSwitch() (err error) {
 		cidr := vSwitchConf.GetString("cidr-block", "172.16.0.0/24")
 		desc := vSwitchConf.GetString("description")
 
-		arg := &ecs.CreateVSwitchArgs{
-			VpcId:       vpcId,
-			ZoneId:      zoneId,
-			CidrBlock:   cidr,
-			VSwitchName: vSwitchName,
-			Description: p.signWithCode(desc),
-		}
+		req := vpc.CreateCreateVSwitchRequest()
 
-		args = append(args, arg)
+		req.VpcId = vpcId
+		req.ZoneId = zoneId
+		req.CidrBlock = cidr
+		req.VSwitchName = vSwitchName
+		req.Description = p.signWithCode(desc)
+
+		createReqList = append(createReqList, req)
 	}
 
-	for _, arg := range args {
+	for _, req := range createReqList {
 
-		switchId, e := p.ECSClient().CreateVSwitch(arg)
-		if e != nil {
-			return e
+		var resp *vpc.CreateVSwitchResponse
+		resp, err = p.VPCClient().CreateVSwitch(req)
+		if err != nil {
+			return
 		}
 
 		logrus.WithField("CODE", p.Code).
-			WithField("ECS-VSWITCH-NAME", arg.VSwitchName).
-			WithField("ECS-VSWITCH-ID", switchId).
+			WithField("ECS-VSWITCH-NAME", req.VSwitchName).
+			WithField("ECS-VSWITCH-ID", resp.VSwitchId).
 			Infoln("VSwitch created")
 	}
 
 	return
 }
-func (p *Aliyun) DeleteVSwitchArgs() (err error) {
-	vSwitchsConf := p.Config.GetConfig("aliyun.ecs.vswitch")
+func (p *Aliyun) DeleteVSwitch() (err error) {
+	vSwitchsConf := p.Config.GetConfig("aliyun.vpc.vswitch")
 
 	if vSwitchsConf.IsEmpty() {
 		return
 	}
 
-	var args []*ecs.DeleteVSwitchArgs
+	var deleteReqList []*vpc.DeleteVSwitchRequest
 
 	for _, vSwitchName := range vSwitchsConf.Keys() {
 
@@ -385,7 +388,7 @@ func (p *Aliyun) DeleteVSwitchArgs() (err error) {
 			return
 		}
 
-		var vSwtich *ecs.VSwitchSetType
+		var vSwtich *vpc.VSwitch
 		vSwtich, err = p.FindVSwitch(vpcName, vSwitchName)
 		if err != nil {
 			return
@@ -395,24 +398,58 @@ func (p *Aliyun) DeleteVSwitchArgs() (err error) {
 			continue
 		}
 
-		arg := &ecs.DeleteVSwitchArgs{
-			VSwitchId: vSwtich.VSwitchId,
-		}
+		req := vpc.CreateDeleteVSwitchRequest()
 
-		args = append(args, arg)
+		req.RegionId = p.Region
+		req.VSwitchId = vSwtich.VSwitchId
+
+		deleteReqList = append(deleteReqList, req)
 	}
 
-	for _, arg := range args {
+	for _, req := range deleteReqList {
 
-		err = p.ECSClient().DeleteVSwitch(arg.VSwitchId)
+		_, err = p.VPCClient().DeleteVSwitch(req)
 		if err != nil {
 			return
 		}
 
 		logrus.WithField("CODE", p.Code).
-			WithField("ECS-VSWITCH-ID", arg.VSwitchId).
+			WithField("ECS-VSWITCH-ID", req.VSwitchId).
 			Infoln("VSwitch deleted")
 	}
 
 	return
+}
+
+func (p *Aliyun) WaitForVSwitchAvailable(vpcId string, vswitchId string, timeout int) (err error) {
+	if timeout <= 0 {
+		timeout = 60
+	}
+
+	for {
+
+		var resp *vpc.DescribeVSwitchesResponse
+		resp, err = p.describeVSwitches(vpcId, vswitchId)
+		if err != nil {
+			return
+		}
+
+		if len(resp.VSwitches.VSwitch) == 0 {
+			err = fmt.Errorf("vswitch %s not found", vswitchId)
+			return
+		}
+
+		if resp.VSwitches.VSwitch[0].Status == "Available" {
+			break
+		}
+
+		timeout = timeout - 5
+		if timeout <= 0 {
+			err = fmt.Errorf("wait for vsiwtch '%s' available timeout", vswitchId)
+			return
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+	return nil
 }
