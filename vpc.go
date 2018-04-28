@@ -9,7 +9,7 @@ import (
 func init() {
 	flow.RegisterHandler("devops.aliyun.vpc.vpc.create", CreateVPC)
 	flow.RegisterHandler("devops.aliyun.vpc.vpc.delete", DeleteVPC)
-	flow.RegisterHandler("devops.aliyun.vpc.running.wait", WaitForAllVpcRunning)
+	flow.RegisterHandler("devops.aliyun.vpc.vpc.running.wait", WaitForAllVpcRunning)
 	flow.RegisterHandler("devops.aliyun.vpc.vswitch.create", CreateVSwitch)
 	flow.RegisterHandler("devops.aliyun.vpc.vswitch.delete", DeleteVSwitch)
 }

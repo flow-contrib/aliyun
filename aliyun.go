@@ -2,6 +2,7 @@ package aliyun
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/denverdino/aliyungo/common"
@@ -24,7 +25,7 @@ type Aliyun struct {
 	AccessKeySecret string
 	Region          string
 	Code            string
-	ZoneId          string
+	// ZoneId          string
 
 	vpcClient *vpc.Client
 	ecsClient *ecs.Client
@@ -46,10 +47,21 @@ func NewAliyun(ctx context.Context, conf config.Configuration) *Aliyun {
 		panic(fmt.Errorf("the context of code is empty"))
 	}
 
-	region := conf.GetString("aliyun.region", "cn-beijing")
-	zoneId := conf.GetString("aliyun.zone-id")
-	akId := conf.GetString("aliyun.access-key-id")
-	akSecret := conf.GetString("aliyun.access-key-secret")
+	envRegion := os.Getenv("ENV_ALIYUN_REGION")
+	envAkId := os.Getenv("ENV_ALIYUN_ACCESS_KEY_ID")
+	envAkSecret := os.Getenv("ENV_ALIYUN_ACCESS_KEY_SECRET")
+
+	akId := conf.GetString("aliyun.access-key-id", envAkId)
+	akSecret := conf.GetString("aliyun.access-key-secret", envAkSecret)
+	region := conf.GetString("aliyun.region", envRegion)
+
+	if len(akId) == 0 || len(akSecret) == 0 {
+		panic(fmt.Errorf("please set aliyun AccessKeyId into config or set env to ${ENV_ALIYUN_ACCESS_KEY_ID} and accessKeySecret into ${ENV_ALIYUN_ACCESS_KEY_SECRET}"))
+	}
+
+	if len(region) == 0 {
+		panic("region is empty, please set it to config file or env ${ENV_ALIYUN_REGION}")
+	}
 
 	ali := &Aliyun{
 		Config: conf,
@@ -57,7 +69,6 @@ func NewAliyun(ctx context.Context, conf config.Configuration) *Aliyun {
 		AccessKeyId:     akId,
 		AccessKeySecret: akSecret,
 		Region:          region,
-		ZoneId:          zoneId,
 		Code:            code,
 	}
 
