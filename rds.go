@@ -12,14 +12,14 @@ import (
 )
 
 func init() {
-	flow.RegisterHandler("devops.aliyun.rds.db.create", CreateRDSInstance)
-	flow.RegisterHandler("devops.aliyun.rds.db.attribute.describe", DescribeRDSInstanceAttr)
-	flow.RegisterHandler("devops.aliyun.rds.db.netinfo.describe", DescribeRDSInstanceNetInfo)
-	flow.RegisterHandler("devops.aliyun.rds.db.delete", DeleteRDSInstance)
-	flow.RegisterHandler("devops.aliyun.rds.db.running.wait", WaitForAllRDSRunning)
-	flow.RegisterHandler("devops.aliyun.rds.db.account.create", CreateRDSDbAccounts)
-	flow.RegisterHandler("devops.aliyun.rds.db.conn.public.alloc", AllocateInstancePublicConnection)
-	flow.RegisterHandler("devops.aliyun.rds.db.conn.public.release", ReleaseInstancePublicConnection)
+	flow.RegisterHandler("devops.aliyun.rds.instance.create", CreateRDSInstance)
+	flow.RegisterHandler("devops.aliyun.rds.instance.attribute.describe", DescribeRDSInstanceAttr)
+	flow.RegisterHandler("devops.aliyun.rds.instance.netinfo.describe", DescribeRDSInstanceNetInfo)
+	flow.RegisterHandler("devops.aliyun.rds.instance.delete", DeleteRDSInstance)
+	flow.RegisterHandler("devops.aliyun.rds.instance.running.wait", WaitForAllRDSRunning)
+	flow.RegisterHandler("devops.aliyun.rds.instance.account.create", CreateRDSDbAccounts)
+	flow.RegisterHandler("devops.aliyun.rds.instance.conn.public.alloc", AllocateInstancePublicConnection)
+	flow.RegisterHandler("devops.aliyun.rds.instance.conn.public.release", ReleaseInstancePublicConnection)
 }
 
 func CreateRDSInstance(ctx context.Context, conf config.Configuration) (err error) {

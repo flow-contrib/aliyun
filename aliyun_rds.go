@@ -620,17 +620,18 @@ func (p *Aliyun) WaitForDBInstance(instanceId string, status string, timeout int
 			return err
 		}
 
-		timeout = timeout - 5
-		time.Sleep(5 * time.Second)
-
 		if len(resp.Items.DBInstance) < 1 {
-			continue
+			break
 		}
 
 		instance := resp.Items.DBInstance[0]
 		if instance.DBInstanceStatus == status {
 			break
 		}
+
+		timeout = timeout - 5
+		time.Sleep(5 * time.Second)
+
 	}
 	return nil
 }
