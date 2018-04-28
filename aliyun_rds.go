@@ -155,7 +155,12 @@ func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceRespon
 		arg := rds.CreateCreateDBInstanceRequest()
 
 		arg.RegionId = string(p.Region)
-		arg.ZoneId = rdsConf.GetString("zone-id", p.ZoneId)
+		arg.ZoneId = rdsConf.GetString("zone-id")
+
+		if len(arg.ZoneId) == 0 {
+			err = fmt.Errorf("the config of zone-id is empty in rds of %s", rdsName)
+			return
+		}
 
 		arg.Engine = engine
 		arg.EngineVersion = rdsConf.GetString("engine-version", "5.6")
