@@ -2,16 +2,29 @@ package aliyun
 
 import (
 	"fmt"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 
-	"github.com/denverdino/aliyungo/slb"
 	"github.com/sirupsen/logrus"
 
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/slb"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
 
 	"github.com/denverdino/aliyungo/common"
 )
 
-func (p *Aliyun) ListLoadBalancers(details bool) (val map[string]*slb.LoadBalancerType, err error) {
+type SLBLoadBalancer struct {
+	*slb.LoadBalancer
+
+	AutoReleaseTime          int
+	Bandwidth                int
+	LoadBalancerSpec         string
+	EndTime                  string
+	EndTimeStamp             int
+	ListenerPorts            slb.ListenerPorts
+	ListenerPortsAndProtocol slb.ListenerPortsAndProtocol
+}
+
+func (p *Aliyun) ListLoadBalancers(details bool) (val map[string]*SLBLoadBalancer, err error) {
 
 	balancersConfig := p.Config.GetConfig("aliyun.slb.balancer")
 
@@ -31,34 +44,52 @@ func (p *Aliyun) ListLoadBalancers(details bool) (val map[string]*slb.LoadBalanc
 		mapSLBNames[name] = true
 	}
 
-	lbs, err := p.SLBClient().DescribeLoadBalancers(
-		&slb.DescribeLoadBalancersArgs{
-			RegionId: common.Region(p.Region),
-		},
-	)
+	req := slb.CreateDescribeLoadBalancersRequest()
+
+	req.RegionId = p.Region
+
+	resp, err := p.SLBClient().DescribeLoadBalancers(req)
 
 	if err != nil {
 		return
 	}
 
-	if len(lbs) == 0 {
+	if len(resp.LoadBalancers.LoadBalancer) == 0 {
 		return
 	}
 
-	ret := map[string]*slb.LoadBalancerType{}
+	ret := map[string]*SLBLoadBalancer{}
 
-	for i, lb := range lbs {
+	for i, lb := range resp.LoadBalancers.LoadBalancer {
 		if mapSLBNames[lb.LoadBalancerName] {
 
 			if details {
-				var lbDetails *slb.LoadBalancerType
-				lbDetails, err = p.SLBClient().DescribeLoadBalancerAttribute(lb.LoadBalancerId)
+				var lbDetails *slb.DescribeLoadBalancerAttributeResponse
+				attrReq := slb.CreateDescribeLoadBalancerAttributeRequest()
+				attrReq.LoadBalancerId = lb.LoadBalancerId
+
+				lbDetails, err = p.SLBClient().DescribeLoadBalancerAttribute(attrReq)
+
 				if err != nil {
 					return
 				}
-				ret[lb.LoadBalancerName] = lbDetails
+
+				lbWithDetails := &SLBLoadBalancer{
+					LoadBalancer:             &resp.LoadBalancers.LoadBalancer[i],
+					AutoReleaseTime:          lbDetails.AutoReleaseTime,
+					Bandwidth:                lbDetails.Bandwidth,
+					LoadBalancerSpec:         lbDetails.LoadBalancerSpec,
+					EndTime:                  lbDetails.EndTime,
+					EndTimeStamp:             lbDetails.EndTimeStamp,
+					ListenerPorts:            lbDetails.ListenerPorts,
+					ListenerPortsAndProtocol: lbDetails.ListenerPortsAndProtocol,
+				}
+
+				lbWithDetails.BackendServers.BackendServer = lbDetails.BackendServers.BackendServer
+
+				ret[lb.LoadBalancerName] = lbWithDetails
 			} else {
-				ret[lb.LoadBalancerName] = &lbs[i]
+				ret[lb.LoadBalancerName] = &SLBLoadBalancer{LoadBalancer: &resp.LoadBalancers.LoadBalancer[i]}
 			}
 		}
 	}
@@ -68,7 +99,7 @@ func (p *Aliyun) ListLoadBalancers(details bool) (val map[string]*slb.LoadBalanc
 	return
 }
 
-func (p *Aliyun) CreateLoadBalancerArgs() (createArgs []*slb.CreateLoadBalancerArgs, err error) {
+func (p *Aliyun) CreateLoadBalancer() (err error) {
 
 	currentLBSs, err := p.ListLoadBalancers(false)
 	if err != nil {
@@ -87,7 +118,7 @@ func (p *Aliyun) CreateLoadBalancerArgs() (createArgs []*slb.CreateLoadBalancerA
 		return
 	}
 
-	var args []*slb.CreateLoadBalancerArgs
+	var reqs []*slb.CreateLoadBalancerRequest
 
 	for _, needCreateSLBName := range slbNames {
 
@@ -134,24 +165,36 @@ func (p *Aliyun) CreateLoadBalancerArgs() (createArgs []*slb.CreateLoadBalancerA
 		chargeType := slbConf.GetString("charge-type", "paybytraffic")
 		bandWidth := slbConf.GetInt64("band-width", 100)
 
-		arg := &slb.CreateLoadBalancerArgs{
-			RegionId:           common.Region(p.Region),
-			LoadBalancerName:   needCreateSLBName,
-			AddressType:        slb.AddressType(addressType),
-			VSwitchId:          vSwitchId,
-			InternetChargeType: slb.InternetChargeType(chargeType),
-			Bandwidth:          int(bandWidth),
-		}
+		req := slb.CreateCreateLoadBalancerRequest()
 
-		args = append(args, arg)
+		req.RegionId = p.Region
+		req.LoadBalancerName = needCreateSLBName
+		req.AddressType = addressType
+		req.VSwitchId = vSwitchId
+		req.InternetChargeType = chargeType
+		req.Bandwidth = requests.NewInteger(int(bandWidth))
+
+		reqs = append(reqs, req)
 	}
 
-	createArgs = args
+	for i := 0; i < len(reqs); i++ {
+		var resp *slb.CreateLoadBalancerResponse
+		resp, err = p.SLBClient().CreateLoadBalancer(reqs[i])
+		if err != nil {
+			return
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("SLB-BANLANCER-NAME", resp.LoadBalancerName).
+			WithField("SLB-BANLANCER-ID", resp.LoadBalancerId).
+			WithField("SLB-REGION", reqs[i].RegionId).
+			Infoln("SLB banlancer created")
+	}
 
 	return
 }
 
-func (p *Aliyun) DeleteLoadBalancerArgs() (deleteArgs []*slb.DeleteLoadBalancerArgs, err error) {
+func (p *Aliyun) DeleteLoadBalancer() (err error) {
 	currentLBSs, err := p.ListLoadBalancers(false)
 	if err != nil {
 		return
@@ -169,7 +212,7 @@ func (p *Aliyun) DeleteLoadBalancerArgs() (deleteArgs []*slb.DeleteLoadBalancerA
 		return
 	}
 
-	var args []*slb.DeleteLoadBalancerArgs
+	var reqs []*slb.DeleteLoadBalancerRequest
 
 	for _, needDeleteSLBName := range slbNames {
 
@@ -183,14 +226,30 @@ func (p *Aliyun) DeleteLoadBalancerArgs() (deleteArgs []*slb.DeleteLoadBalancerA
 			continue
 		}
 
-		arg := &slb.DeleteLoadBalancerArgs{
-			LoadBalancerId: lbInstancd.LoadBalancerId,
-		}
+		req := slb.CreateDeleteLoadBalancerRequest()
 
-		args = append(args, arg)
+		req.LoadBalancerId = lbInstancd.LoadBalancerId
+
+		reqs = append(reqs, req)
 	}
 
-	deleteArgs = args
+	for i := 0; i < len(reqs); i++ {
+		_, err = p.SLBClient().DeleteLoadBalancer(reqs[i])
+
+		if IsAliErrCode(err, "InvalidLoadBalancerId.NotFound") {
+			err = nil
+			continue
+		}
+
+		if err != nil {
+			err = fmt.Errorf("delete balancer failure, balancer id : %s, error: %s", reqs[i].LoadBalancerId, err.Error())
+			return
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("SLB-BANLANCER-ID", reqs[i].LoadBalancerId).
+			Infoln("SLB banlancer deleted")
+	}
 
 	return
 }

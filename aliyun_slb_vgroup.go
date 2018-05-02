@@ -4,14 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/denverdino/aliyungo/ecs"
-	"github.com/denverdino/aliyungo/slb"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/slb"
 	"github.com/sirupsen/logrus"
-
-	"github.com/denverdino/aliyungo/common"
 )
 
-func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupArgs, err error) {
+func (p *Aliyun) CreateVServerGroup() (err error) {
 	balancersConfig := p.Config.GetConfig("aliyun.slb.balancer")
 
 	if balancersConfig.IsEmpty() {
@@ -23,7 +21,7 @@ func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupA
 		return
 	}
 
-	var args []*slb.CreateVServerGroupArgs
+	var reqs []*slb.CreateVServerGroupRequest
 
 	for _, balancerName := range balancersConfig.Keys() {
 
@@ -42,11 +40,13 @@ func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupA
 			continue
 		}
 
+		describVgroupReq := slb.CreateDescribeVServerGroupsRequest()
+
+		describVgroupReq.LoadBalancerId = lb.LoadBalancerId
+		describVgroupReq.RegionId = p.Region
+
 		var existGroups *slb.DescribeVServerGroupsResponse
-		existGroups, err = p.SLBClient().DescribeVServerGroups(&slb.DescribeVServerGroupsArgs{
-			LoadBalancerId: lb.LoadBalancerId,
-			RegionId:       common.Region(p.Region),
-		})
+		existGroups, err = p.SLBClient().DescribeVServerGroups(describVgroupReq)
 
 		if err != nil {
 			return
@@ -77,15 +77,15 @@ func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupA
 
 				serarchConf := groupConf.GetConfig(srv + ".instance")
 
-				tag := map[string]string{}
+				var tags []Tag
 
 				tagConf := serarchConf.GetConfig("tag")
 
 				for _, k := range tagConf.Keys() {
-					tag[k] = tagConf.GetString(k)
+					tags = append(tags, Tag{Key: k, Value: tagConf.GetString(k)})
 				}
 
-				var inst *ecs.InstanceAttributesType
+				var inst *ecs.Instance
 				inst, err = p.FindECSInstance(
 					&SearchECSInstanceArgs{
 						InstanceId:   serarchConf.GetString("id"),
@@ -96,7 +96,7 @@ func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupA
 						VSwitchName:  vSwitchName,
 						vswitchId:    lb.VSwitchId,
 						vpcId:        lb.VpcId,
-						Tag:          tag,
+						Tags:         tags,
 					},
 				)
 
@@ -105,17 +105,18 @@ func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupA
 				}
 
 				if inst == nil {
-					err = fmt.Errorf("instance '%s' not found: %s.%s.%s, tags: %#v", serarchConf.GetString("name"), balancerName, groupName, srv, tag)
+					err = fmt.Errorf("instance '%s' not found: %s.%s.%s, tags: %#v", serarchConf.GetString("name"), balancerName, groupName, srv, tags)
 					return
 				}
 
-				var backendServers []slb.VBackendServerType
+				var backendServers []slb.BackendServer
 
 				portsConf := groupConf.GetConfig(srv + ".ports")
 
 				for _, portName := range portsConf.Keys() {
 					portConf := portsConf.GetConfig(portName)
-					vSrv := slb.VBackendServerType{
+
+					vSrv := slb.BackendServer{
 						ServerId: inst.InstanceId,
 						Port:     int(portConf.GetInt32("port")),
 						Weight:   int(portConf.GetInt32("weight")),
@@ -131,24 +132,38 @@ func (p *Aliyun) CreateVServerGroupArgs() (createArgs []*slb.CreateVServerGroupA
 					return
 				}
 
-				arg := &slb.CreateVServerGroupArgs{
-					LoadBalancerId:   lb.LoadBalancerId,
-					RegionId:         common.Region(p.Region),
-					VServerGroupName: groupName,
-					BackendServers:   string(srvData),
-				}
+				req := slb.CreateCreateVServerGroupRequest()
+
+				req.LoadBalancerId = lb.LoadBalancerId
+				req.RegionId = p.Region
+				req.VServerGroupName = groupName
+				req.BackendServers = string(srvData)
 
 				logrus.WithField("SLB-INSTANCE-NAME", balancerName).
 					WithField("SLB-VGROUP-NAME", groupName).
 					WithField("SLB-VGROUP-VSERVER", string(srvData)).
 					Debugln("SLB VServerGroup Info")
 
-				args = append(args, arg)
+				reqs = append(reqs, req)
 			}
 		}
 	}
 
-	createArgs = args
+	for i := 0; i < len(reqs); i++ {
+
+		var resp *slb.CreateVServerGroupResponse
+
+		resp, err = p.SLBClient().CreateVServerGroup(reqs[i])
+		if err != nil {
+			return
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("SLB-BANLANCER-ID", reqs[i].LoadBalancerId).
+			WithField("SLB-BANLANCER-VGROUP-NAME", reqs[i].VServerGroupName).
+			WithField("SLB-BANLANCER-VGROUP-ID", resp.VServerGroupId).
+			Infoln("SLB VGroup created")
+	}
 
 	return
 }

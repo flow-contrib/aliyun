@@ -7,11 +7,11 @@ import (
 
 	"github.com/denverdino/aliyungo/common"
 	"github.com/denverdino/aliyungo/cs"
-	"github.com/denverdino/aliyungo/ecs"
-	"github.com/denverdino/aliyungo/slb"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/alidns"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/slb"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 
@@ -20,6 +20,11 @@ import (
 
 	alierrors "github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
 )
+
+type Tag struct {
+	Key   string
+	Value string
+}
 
 type Aliyun struct {
 	Config config.Configuration
@@ -81,7 +86,11 @@ func NewAliyun(ctx context.Context, conf config.Configuration) *Aliyun {
 
 func (p *Aliyun) ECSClient() *ecs.Client {
 	if p.ecsClient == nil {
-		p.ecsClient = ecs.NewClient(p.AccessKeyId, p.AccessKeySecret)
+		var err error
+		p.ecsClient, err = ecs.NewClientWithAccessKey(p.Region, p.AccessKeyId, p.AccessKeySecret)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	return p.ecsClient
@@ -134,8 +143,13 @@ func (p *Aliyun) CSClient() *cs.Client {
 
 func (p *Aliyun) SLBClient() *slb.Client {
 	if p.slbClient == nil {
-		p.slbClient = slb.NewSLBClient(p.AccessKeyId, p.AccessKeySecret, common.Region(p.Region))
+		var err error
+		p.slbClient, err = slb.NewClientWithAccessKey(p.Region, p.AccessKeyId, p.AccessKeySecret)
+		if err != nil {
+			panic(err)
+		}
 	}
+
 	return p.slbClient
 }
 

@@ -27,8 +27,8 @@ func (p *Aliyun) AddDomainRecord() (err error) {
 		req.RR = dnsConf.GetString("rr")
 		req.Type = dnsConf.GetString("type")
 		req.Value = dnsConf.GetString("value")
-		req.TTL = requests.Integer(dnsConf.GetString("ttl", "600"))
-		req.Priority = requests.Integer(dnsConf.GetString("priority", "10"))
+		req.TTL = requests.NewInteger(int(dnsConf.GetInt32("ttl", 600)))
+		req.Priority = requests.NewInteger(int(dnsConf.GetInt32("priority", 10)))
 		req.Line = dnsConf.GetString("line", "default")
 
 		_, err = p.DNSClient().AddDomainRecord(req)
@@ -74,8 +74,8 @@ func (p *Aliyun) UpdateDomainRecord() (err error) {
 		req.RR = dnsConf.GetString("rr")
 		req.Type = dnsConf.GetString("type")
 		req.Value = dnsConf.GetString("value")
-		req.TTL = requests.Integer(dnsConf.GetString("ttl", "600"))
-		req.Priority = requests.Integer(dnsConf.GetString("priority", "10"))
+		req.TTL = requests.NewInteger(int(dnsConf.GetInt32("ttl", 600)))
+		req.Priority = requests.NewInteger(int(dnsConf.GetInt32("priority", 10)))
 		req.Line = dnsConf.GetString("line", "default")
 
 		if len(describeResp.DomainRecords.Record) == 0 {

@@ -3,9 +3,7 @@ package aliyun
 import (
 	"fmt"
 
-	"github.com/denverdino/aliyungo/common"
-	"github.com/denverdino/aliyungo/ecs"
-
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
 )
 
@@ -16,13 +14,14 @@ type SearchECSInstanceArgs struct {
 	VSwitchName  string
 	ZoneId       string
 	NetworkType  string
-	Tag          map[string]string
+
+	Tags []Tag
 
 	vpcId     string
 	vswitchId string
 }
 
-func (p *Aliyun) FindECSInstance(arg *SearchECSInstanceArgs) (inst *ecs.InstanceAttributesType, err error) {
+func (p *Aliyun) FindECSInstance(arg *SearchECSInstanceArgs) (inst *ecs.Instance, err error) {
 
 	if len(arg.vpcId)+len(arg.vswitchId) == 0 {
 		if len(arg.VPCName) > 0 && len(arg.VSwitchName) > 0 {
@@ -39,33 +38,51 @@ func (p *Aliyun) FindECSInstance(arg *SearchECSInstanceArgs) (inst *ecs.Instance
 		}
 	}
 
-	instances, _, err := p.ECSClient().DescribeInstances(
-		&ecs.DescribeInstancesArgs{
-			RegionId:            common.Region(p.Region),
-			InstanceIds:         arg.InstanceId,
-			InstanceName:        arg.InstanceName,
-			InstanceNetworkType: arg.NetworkType,
-			ZoneId:              arg.ZoneId,
-			Tag:                 arg.Tag,
-			VSwitchId:           arg.vswitchId,
-			VpcId:               arg.vpcId,
-		},
-	)
+	req := ecs.CreateDescribeInstancesRequest()
 
+	req.RegionId = p.Region
+	req.InstanceIds = arg.InstanceId
+	req.InstanceName = arg.InstanceName
+	req.InstanceNetworkType = arg.NetworkType
+	req.ZoneId = arg.ZoneId
+	req.VSwitchId = arg.vswitchId
+	req.VpcId = arg.vpcId
+
+	for i, tag := range arg.Tags {
+		switch i {
+		case 0:
+			req.Tag1Key = tag.Key
+			req.Tag1Value = tag.Value
+		case 1:
+			req.Tag2Key = tag.Key
+			req.Tag2Value = tag.Value
+		case 2:
+			req.Tag3Key = tag.Key
+			req.Tag3Value = tag.Value
+		case 3:
+			req.Tag4Key = tag.Key
+			req.Tag4Value = tag.Value
+		case 4:
+			req.Tag5Key = tag.Key
+			req.Tag5Value = tag.Value
+		}
+	}
+
+	resp, err := p.ECSClient().DescribeInstances(req)
 	if err != nil {
 		return
 	}
 
-	if len(instances) == 0 {
+	if len(resp.Instances.Instance) == 0 {
 		return
 	}
 
-	if len(instances) > 1 {
+	if len(resp.Instances.Instance) > 1 {
 		err = fmt.Errorf("find more than one instance")
 		return
 	}
 
-	inst = &instances[0]
+	inst = &resp.Instances.Instance[0]
 
 	return
 }

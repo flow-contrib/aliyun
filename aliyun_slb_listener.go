@@ -1,196 +1,35 @@
 package aliyun
 
 import (
-	"encoding/json"
 	"fmt"
+	"strconv"
 
-	"github.com/denverdino/aliyungo/slb"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/slb"
 	"github.com/sirupsen/logrus"
-
-	"github.com/denverdino/aliyungo/common"
 )
 
-type CreateLoadBalancerHTTPListenerArgs struct {
-	slbClient *slb.Client
-	slb.HTTPListenerType
-	serverCertificateId string
-}
+func (p *Aliyun) startSLBListener(loadBalancerId string, port requests.Integer) (err error) {
 
-func (p *CreateLoadBalancerHTTPListenerArgs) IsHTTPs() bool {
-	return len(p.serverCertificateId) != 0
-}
+	req := slb.CreateStartLoadBalancerListenerRequest()
 
-func (p *CreateLoadBalancerHTTPListenerArgs) HTTPCreationArg() (args *slb.CreateLoadBalancerHTTPListenerArgs) {
-	ret := slb.CreateLoadBalancerHTTPListenerArgs(p.HTTPListenerType)
-	return &ret
-}
+	req.LoadBalancerId = loadBalancerId
+	req.RegionId = p.Region
+	req.ListenerPort = port
 
-func (p *CreateLoadBalancerHTTPListenerArgs) HTTPSCreationArg() (args *slb.CreateLoadBalancerHTTPSListenerArgs) {
-	return &slb.CreateLoadBalancerHTTPSListenerArgs{
-		HTTPListenerType:    p.HTTPListenerType,
-		ServerCertificateId: p.serverCertificateId,
-	}
-}
-
-func (p *CreateLoadBalancerHTTPListenerArgs) Create() (err error) {
-	if p.IsHTTPs() {
-		err = p.slbClient.CreateLoadBalancerHTTPSListener(p.HTTPSCreationArg())
-		if err != nil {
-			return
-		}
-	} else {
-		err = p.slbClient.CreateLoadBalancerHTTPListener(p.HTTPCreationArg())
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-func (p *CreateLoadBalancerHTTPListenerArgs) Wait(toStatus slb.ListenerStatus) (err error) {
-	if p.IsHTTPs() {
-		err = p.slbClient.WaitForListenerAsyn(p.LoadBalancerId, p.ListenerPort, slb.ListenerType("HTTPS"), toStatus, 10)
-	} else {
-		err = p.slbClient.WaitForListenerAsyn(p.LoadBalancerId, p.ListenerPort, slb.ListenerType("HTTP"), toStatus, 10)
-	}
-	return
-}
-
-func (p *CreateLoadBalancerHTTPListenerArgs) CreateAndWait() (err error) {
-	err = p.Create()
+	_, err = p.SLBClient().StartLoadBalancerListener(req)
 	if err != nil {
 		return
 	}
 
-	err = p.slbClient.StartLoadBalancerListener(p.LoadBalancerId, p.ListenerPort)
-	if err != nil {
-		return
-	}
-
-	err = p.Wait(slb.Running)
-	if err != nil {
-		return
-	}
+	logrus.WithField("CODE", p.Code).
+		WithField("SLB-ID", loadBalancerId).
+		WithField("PORT", port).Infoln("Listener started")
 
 	return
 }
 
-type CreateLoadBalancerSocketListenerArgs struct {
-	slbClient *slb.Client
-	isTCP     bool
-
-	// Common part
-	LoadBalancerId            string
-	ListenerPort              int
-	BackendServerPort         int
-	Bandwidth                 int
-	Scheduler                 slb.SchedulerType
-	PersistenceTimeout        int
-	HealthCheck               slb.FlagType
-	HealthCheckConnectPort    int
-	HealthyThreshold          int
-	UnhealthyThreshold        int
-	HealthCheckConnectTimeout int
-	HealthCheckInterval       int
-	VServerGroup              slb.FlagType
-	VServerGroupId            string
-
-	// TCP Part
-	HealthCheckType     slb.HealthCheckType
-	HealthCheckDomain   string
-	HealthCheckURI      string
-	HealthCheckHttpCode slb.HealthCheckHttpCodeType
-}
-
-func (p *CreateLoadBalancerSocketListenerArgs) IsTCP() bool {
-	return p.isTCP
-}
-
-func (p *CreateLoadBalancerSocketListenerArgs) Create() (err error) {
-	if p.IsTCP() {
-		err = p.slbClient.CreateLoadBalancerTCPListener(
-			&slb.CreateLoadBalancerTCPListenerArgs{
-				LoadBalancerId:            p.LoadBalancerId,
-				ListenerPort:              p.ListenerPort,
-				BackendServerPort:         p.BackendServerPort,
-				Bandwidth:                 p.Bandwidth,
-				Scheduler:                 p.Scheduler,
-				PersistenceTimeout:        p.PersistenceTimeout,
-				HealthCheck:               p.HealthCheck,
-				HealthCheckConnectPort:    p.HealthCheckConnectPort,
-				HealthyThreshold:          p.HealthyThreshold,
-				UnhealthyThreshold:        p.UnhealthyThreshold,
-				HealthCheckConnectTimeout: p.HealthCheckConnectTimeout,
-				HealthCheckInterval:       p.HealthCheckInterval,
-				VServerGroup:              p.VServerGroup,
-				VServerGroupId:            p.VServerGroupId,
-
-				HealthCheckType:     p.HealthCheckType,
-				HealthCheckDomain:   p.HealthCheckDomain,
-				HealthCheckURI:      p.HealthCheckURI,
-				HealthCheckHttpCode: p.HealthCheckHttpCode,
-			},
-		)
-		if err != nil {
-			return
-		}
-	} else {
-		err = p.slbClient.CreateLoadBalancerUDPListener(
-			&slb.CreateLoadBalancerUDPListenerArgs{
-				LoadBalancerId:            p.LoadBalancerId,
-				ListenerPort:              p.ListenerPort,
-				BackendServerPort:         p.BackendServerPort,
-				Bandwidth:                 p.Bandwidth,
-				Scheduler:                 p.Scheduler,
-				PersistenceTimeout:        p.PersistenceTimeout,
-				HealthCheck:               p.HealthCheck,
-				HealthCheckConnectPort:    p.HealthCheckConnectPort,
-				HealthyThreshold:          p.HealthyThreshold,
-				UnhealthyThreshold:        p.UnhealthyThreshold,
-				HealthCheckConnectTimeout: p.HealthCheckConnectTimeout,
-				HealthCheckInterval:       p.HealthCheckInterval,
-				VServerGroup:              p.VServerGroup,
-				VServerGroupId:            p.VServerGroupId,
-			},
-		)
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-func (p *CreateLoadBalancerSocketListenerArgs) Wait(toStatus slb.ListenerStatus) (err error) {
-	if p.IsTCP() {
-		err = p.slbClient.WaitForListenerAsyn(p.LoadBalancerId, p.ListenerPort, slb.ListenerType("TCP"), toStatus, 10)
-	} else {
-		err = p.slbClient.WaitForListenerAsyn(p.LoadBalancerId, p.ListenerPort, slb.ListenerType("UDP"), toStatus, 10)
-	}
-	return
-}
-
-func (p *CreateLoadBalancerSocketListenerArgs) CreateAndWait() (err error) {
-	err = p.Create()
-	if err != nil {
-		return
-	}
-
-	err = p.slbClient.StartLoadBalancerListener(p.LoadBalancerId, p.ListenerPort)
-	if err != nil {
-		return
-	}
-
-	err = p.Wait(slb.Running)
-	if err != nil {
-		return
-	}
-
-	return
-}
-
-func (p *Aliyun) CreateLoadBalancerHTTPListenerArgs() (createArgs []*CreateLoadBalancerHTTPListenerArgs, err error) {
+func (p *Aliyun) CreateLoadBalancerHTTPListener() (err error) {
 	currentLBSs, err := p.ListLoadBalancers(true)
 	if err != nil {
 		return
@@ -208,7 +47,7 @@ func (p *Aliyun) CreateLoadBalancerHTTPListenerArgs() (createArgs []*CreateLoadB
 		return
 	}
 
-	var args []*CreateLoadBalancerHTTPListenerArgs
+	var reqs []*slb.CreateLoadBalancerHTTPListenerRequest
 
 	for _, slbName := range slbNames {
 
@@ -221,13 +60,13 @@ func (p *Aliyun) CreateLoadBalancerHTTPListenerArgs() (createArgs []*CreateLoadB
 
 		lbConfig := balancersConfig.GetConfig(slbName)
 
-		listenersConfig := lbConfig.GetConfig("http-listener")
+		listenersConfig := lbConfig.GetConfig("listener.http")
 
 		if listenersConfig.IsEmpty() {
 			continue
 		}
 
-		var alreadyListendPorts = make(map[int]bool)
+		var alreadyListendPorts = make(map[string]bool)
 
 		for _, port := range slbInstance.ListenerPorts.ListenerPort {
 			alreadyListendPorts[port] = true
@@ -249,7 +88,7 @@ func (p *Aliyun) CreateLoadBalancerHTTPListenerArgs() (createArgs []*CreateLoadB
 				return
 			}
 
-			if alreadyListendPorts[int(listenPort)] {
+			if alreadyListendPorts[strconv.Itoa(int(listenPort))] {
 
 				logrus.WithField("CODE", p.Code).
 					WithField("SLB-NAME", slbName).
@@ -260,50 +99,60 @@ func (p *Aliyun) CreateLoadBalancerHTTPListenerArgs() (createArgs []*CreateLoadB
 				continue
 			}
 
-			arg := &CreateLoadBalancerHTTPListenerArgs{
+			req := slb.CreateCreateLoadBalancerHTTPListenerRequest()
 
-				slbClient: p.SLBClient(),
+			// serverCertificateId: listenerConfig.GetString("server-certificate-id"),
 
-				serverCertificateId: listenerConfig.GetString("server-certificate-id"),
+			req.LoadBalancerId = slbInstance.LoadBalancerId
+			req.ListenerPort = requests.NewInteger(int(listenPort))
+			req.BackendServerPort = requests.NewInteger(int(listenerConfig.GetInt64("server-port")))
+			req.Bandwidth = requests.NewInteger(int(listenerConfig.GetInt64("band-width")))
+			req.Scheduler = listenerConfig.GetString("scheduler", "wrr")
+			req.Gzip = listenerConfig.GetString("gzip", "on")
+			req.StickySession = listenerConfig.GetString("sticky-session", "off")
+			req.StickySessionType = listenerConfig.GetString("sticky-session-type", "insert")
+			req.CookieTimeout = requests.NewInteger(int(listenerConfig.GetInt64("cookie-timeout", 86400)))
+			req.Cookie = listenerConfig.GetString("cookie")
+			req.HealthCheck = listenerConfig.GetString("health-check.check", "on")
+			req.HealthCheckDomain = listenerConfig.GetString("health-check.domain")
+			req.HealthCheckURI = listenerConfig.GetString("health-check.url")
+			req.HealthCheckConnectPort = requests.NewInteger(int(listenerConfig.GetInt32("health-check.connect-port", listenPort)))
+			req.HealthyThreshold = requests.NewInteger(int(listenerConfig.GetInt64("health-check.threshold", 3)))
+			req.UnhealthyThreshold = requests.NewInteger(int(listenerConfig.GetInt64("health-check.unhealthy-threshold", 3)))
+			req.HealthCheckTimeout = requests.NewInteger(int(listenerConfig.GetInt64("health-check.timeout", 5)))
+			req.HealthCheckInterval = requests.NewInteger(int(listenerConfig.GetInt64("health-check.interval", 2)))
+			req.HealthCheckHttpCode = listenerConfig.GetString("health-check.http-code", "http_2xx")
+			req.VServerGroupId = listenerConfig.GetString("vserver-group-id")
+			req.XForwardedForSLBID = listenerConfig.GetString("x-forward-for-slb-id", "on")
+			req.XForwardedForSLBIP = listenerConfig.GetString("x-forward-for-slb-ip", "on")
+			req.XForwardedForProto = listenerConfig.GetString("x-forward-for-proto", "on")
 
-				HTTPListenerType: slb.HTTPListenerType{
-					LoadBalancerId:         slbInstance.LoadBalancerId,
-					ListenerPort:           int(listenPort),
-					BackendServerPort:      int(listenerConfig.GetInt64("server-port")),
-					Bandwidth:              int(listenerConfig.GetInt64("band-width")),
-					Scheduler:              slb.SchedulerType(listenerConfig.GetString("scheduler", "wrr")),
-					Gzip:                   slb.FlagType(listenerConfig.GetString("gzip", "on")),
-					StickySession:          slb.FlagType(listenerConfig.GetString("sticky-session", "off")),
-					StickySessionType:      slb.StickySessionType(listenerConfig.GetString("sticky-session-type", "insert")),
-					CookieTimeout:          int(listenerConfig.GetInt64("cookie-timeout", 86400)),
-					Cookie:                 listenerConfig.GetString("cookie"),
-					HealthCheck:            slb.FlagType(listenerConfig.GetString("health-check.check", "on")),
-					HealthCheckDomain:      listenerConfig.GetString("health-check.domain"),
-					HealthCheckURI:         listenerConfig.GetString("health-check.url"),
-					HealthCheckConnectPort: int(listenerConfig.GetInt64("health-check.connect-port")),
-					HealthyThreshold:       int(listenerConfig.GetInt64("health-check.threshold", 3)),
-					UnhealthyThreshold:     int(listenerConfig.GetInt64("health-check.unhealthy-threshold", 3)),
-					HealthCheckTimeout:     int(listenerConfig.GetInt64("health-check.timeout", 5)),
-					HealthCheckInterval:    int(listenerConfig.GetInt64("health-check.interval", 2)),
-					HealthCheckHttpCode:    slb.HealthCheckHttpCodeType(listenerConfig.GetString("health-check.http-code", "http_2xx")),
-					VServerGroup:           slb.FlagType(listenerConfig.GetString("vserver-group", "on")),
-					VServerGroupId:         listenerConfig.GetString("vserver-group-id"),
-					XForwardedFor_SLBID:    slb.FlagType(listenerConfig.GetString("x-forward-for-slb-id", "on")),
-					XForwardedFor_SLBIP:    slb.FlagType(listenerConfig.GetString("x-forward-for-slb-ip", "on")),
-					XForwardedFor_proto:    slb.FlagType(listenerConfig.GetString("x-forward-for-proto", "on")),
-				},
-			}
-
-			args = append(args, arg)
+			reqs = append(reqs, req)
 		}
 	}
 
-	createArgs = args
+	for i := 0; i < len(reqs); i++ {
+
+		_, err = p.SLBClient().CreateLoadBalancerHTTPListener(reqs[i])
+		if err != nil {
+			return
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("SLB-BANLANCER-ID", reqs[i].LoadBalancerId).
+			WithField("SLB-BANLANCER-LISTEN-PORT", reqs[i].ListenerPort).
+			Infoln("SLB http listener created")
+
+		err = p.startSLBListener(reqs[i].LoadBalancerId, reqs[i].ListenerPort)
+		if err != nil {
+			return
+		}
+	}
 
 	return
 }
 
-func (p *Aliyun) CreateLoadBalancerSocketListenerArgs(isTCP bool) (createArgs []*CreateLoadBalancerSocketListenerArgs, err error) {
+func (p *Aliyun) CreateLoadBalancerHTTPSListener() (err error) {
 	currentLBSs, err := p.ListLoadBalancers(true)
 	if err != nil {
 		return
@@ -321,7 +170,7 @@ func (p *Aliyun) CreateLoadBalancerSocketListenerArgs(isTCP bool) (createArgs []
 		return
 	}
 
-	var args []*CreateLoadBalancerSocketListenerArgs
+	var reqs []*slb.CreateLoadBalancerHTTPSListenerRequest
 
 	for _, slbName := range slbNames {
 
@@ -334,19 +183,13 @@ func (p *Aliyun) CreateLoadBalancerSocketListenerArgs(isTCP bool) (createArgs []
 
 		lbConfig := balancersConfig.GetConfig(slbName)
 
-		listenerConfName := "tcp-listener"
-
-		if !isTCP {
-			listenerConfName = "udp-listener"
-		}
-
-		listenersConfig := lbConfig.GetConfig(listenerConfName)
+		listenersConfig := lbConfig.GetConfig("listener.https")
 
 		if listenersConfig.IsEmpty() {
 			continue
 		}
 
-		var alreadyListendPorts = make(map[int]bool)
+		var alreadyListendPorts = make(map[string]bool)
 
 		for _, port := range slbInstance.ListenerPorts.ListenerPort {
 			alreadyListendPorts[port] = true
@@ -368,52 +211,293 @@ func (p *Aliyun) CreateLoadBalancerSocketListenerArgs(isTCP bool) (createArgs []
 				return
 			}
 
-			if alreadyListendPorts[int(listenPort)] {
+			if alreadyListendPorts[strconv.Itoa(int(listenPort))] {
 
 				logrus.WithField("CODE", p.Code).
 					WithField("SLB-NAME", slbName).
 					WithField("SLB-ID", slbInstance.LoadBalancerId).
 					WithField("SLB-LISTENER", listenerName).
-					WithField("IS-TCP", isTCP).
 					WithField("PORT", listenPort).Infoln("Listener already created")
 
 				continue
 			}
 
-			arg := &CreateLoadBalancerSocketListenerArgs{
+			req := slb.CreateCreateLoadBalancerHTTPSListenerRequest()
 
-				slbClient: p.SLBClient(),
+			req.ServerCertificateId = listenerConfig.GetString("server-certificate-id")
+			req.CACertificateId = listenerConfig.GetString("ca-certificate-id")
+			req.LoadBalancerId = slbInstance.LoadBalancerId
+			req.ListenerPort = requests.NewInteger(int(listenPort))
+			req.BackendServerPort = requests.NewInteger(int(listenerConfig.GetInt64("server-port")))
+			req.Bandwidth = requests.NewInteger(int(listenerConfig.GetInt64("band-width")))
+			req.Scheduler = listenerConfig.GetString("scheduler", "wrr")
+			req.Gzip = listenerConfig.GetString("gzip", "on")
+			req.StickySession = listenerConfig.GetString("sticky-session", "off")
+			req.StickySessionType = listenerConfig.GetString("sticky-session-type", "insert")
+			req.CookieTimeout = requests.NewInteger(int(listenerConfig.GetInt64("cookie-timeout", 86400)))
+			req.Cookie = listenerConfig.GetString("cookie")
+			req.HealthCheck = listenerConfig.GetString("health-check.check", "on")
+			req.HealthCheckDomain = listenerConfig.GetString("health-check.domain")
+			req.HealthCheckURI = listenerConfig.GetString("health-check.url")
+			req.HealthCheckConnectPort = requests.NewInteger(int(listenerConfig.GetInt32("health-check.connect-port", listenPort)))
+			req.HealthyThreshold = requests.NewInteger(int(listenerConfig.GetInt64("health-check.threshold", 3)))
+			req.UnhealthyThreshold = requests.NewInteger(int(listenerConfig.GetInt64("health-check.unhealthy-threshold", 3)))
+			req.HealthCheckTimeout = requests.NewInteger(int(listenerConfig.GetInt64("health-check.timeout", 5)))
+			req.HealthCheckInterval = requests.NewInteger(int(listenerConfig.GetInt64("health-check.interval", 2)))
+			req.HealthCheckHttpCode = listenerConfig.GetString("health-check.http-code", "http_2xx")
+			req.VServerGroupId = listenerConfig.GetString("vserver-group-id")
+			req.XForwardedForSLBID = listenerConfig.GetString("x-forward-for-slb-id", "on")
+			req.XForwardedForSLBIP = listenerConfig.GetString("x-forward-for-slb-ip", "on")
+			req.XForwardedForProto = listenerConfig.GetString("x-forward-for-proto", "on")
 
-				isTCP: isTCP,
-
-				// Common part
-				LoadBalancerId:            slbInstance.LoadBalancerId,
-				ListenerPort:              int(listenPort),
-				BackendServerPort:         int(listenerConfig.GetInt64("server-port")),
-				Bandwidth:                 int(listenerConfig.GetInt64("band-width")),
-				Scheduler:                 slb.SchedulerType(listenerConfig.GetString("scheduler", "wrr")),
-				PersistenceTimeout:        int(listenerConfig.GetInt64("persistence-timeout")),
-				HealthCheck:               slb.FlagType(listenerConfig.GetString("health-check.check", "on")),
-				HealthCheckConnectPort:    int(listenerConfig.GetInt64("health-check.connect-port")),
-				HealthyThreshold:          int(listenerConfig.GetInt64("health-check.threshold", 3)),
-				UnhealthyThreshold:        int(listenerConfig.GetInt64("health-check.unhealthy-threshold", 3)),
-				HealthCheckConnectTimeout: int(listenerConfig.GetInt64("health-check.timeout", 5)),
-				HealthCheckInterval:       int(listenerConfig.GetInt64("health-check.interval", 2)),
-				VServerGroup:              slb.FlagType(listenerConfig.GetString("vserver-group", "on")),
-				VServerGroupId:            listenerConfig.GetString("vserver-group-id"),
-
-				// TCP Part
-				HealthCheckType:     slb.HealthCheckType(listenerConfig.GetString("health-check.type", "tcp")),
-				HealthCheckDomain:   listenerConfig.GetString("health-check.domain"),
-				HealthCheckURI:      listenerConfig.GetString("health-check.url"),
-				HealthCheckHttpCode: slb.HealthCheckHttpCodeType(listenerConfig.GetString("health-check.http-code", "http_2xx")),
-			}
-
-			args = append(args, arg)
+			reqs = append(reqs, req)
 		}
 	}
 
-	createArgs = args
+	for i := 0; i < len(reqs); i++ {
+
+		_, err = p.SLBClient().CreateLoadBalancerHTTPSListener(reqs[i])
+		if err != nil {
+			return
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("SLB-BANLANCER-ID", reqs[i].LoadBalancerId).
+			WithField("SLB-BANLANCER-LISTEN-PORT", reqs[i].ListenerPort).
+			Infoln("SLB https listener created")
+
+		err = p.startSLBListener(reqs[i].LoadBalancerId, reqs[i].ListenerPort)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (p *Aliyun) CreateLoadBalancerTCPListener() (err error) {
+	currentLBSs, err := p.ListLoadBalancers(true)
+	if err != nil {
+		return
+	}
+
+	if err != nil {
+		return
+	}
+
+	balancersConfig := p.Config.GetConfig("aliyun.slb.balancer")
+
+	slbNames := balancersConfig.Keys()
+
+	if len(slbNames) == 0 {
+		return
+	}
+
+	var reqs []*slb.CreateLoadBalancerTCPListenerRequest
+
+	for _, slbName := range slbNames {
+
+		slbInstance, exist := currentLBSs[slbName]
+
+		if !exist {
+			err = fmt.Errorf("slb of %s not exist", slbName)
+			return
+		}
+
+		lbConfig := balancersConfig.GetConfig(slbName)
+
+		listenersConfig := lbConfig.GetConfig("listener.tcp")
+
+		if listenersConfig.IsEmpty() {
+			continue
+		}
+
+		var alreadyListendPorts = make(map[string]bool)
+
+		for _, port := range slbInstance.ListenerPorts.ListenerPort {
+			alreadyListendPorts[port] = true
+		}
+
+		for _, listenerName := range listenersConfig.Keys() {
+
+			listenerConfig := listenersConfig.GetConfig(listenerName)
+
+			if listenerConfig.IsEmpty() {
+				err = fmt.Errorf("listen config is empty: %s.%s", slbName, listenerName)
+				return
+			}
+
+			listenPort := listenerConfig.GetInt32("listen-port")
+
+			if listenPort <= 0 {
+				err = fmt.Errorf("listen port is not correct, listener: %s.%s", slbName, listenerName)
+				return
+			}
+
+			if alreadyListendPorts[strconv.Itoa(int(listenPort))] {
+
+				logrus.WithField("CODE", p.Code).
+					WithField("SLB-NAME", slbName).
+					WithField("SLB-ID", slbInstance.LoadBalancerId).
+					WithField("SLB-LISTENER", listenerName).
+					WithField("PORT", listenPort).Infoln("Listener already created")
+
+				continue
+			}
+
+			req := slb.CreateCreateLoadBalancerTCPListenerRequest()
+
+			// Common part
+			req.LoadBalancerId = slbInstance.LoadBalancerId
+			req.ListenerPort = requests.NewInteger(int(listenPort))
+			req.BackendServerPort = requests.NewInteger(int(listenerConfig.GetInt64("server-port")))
+			req.Bandwidth = requests.NewInteger(int(listenerConfig.GetInt64("band-width")))
+			req.Scheduler = listenerConfig.GetString("scheduler", "wrr")
+			req.PersistenceTimeout = requests.NewInteger(int(listenerConfig.GetInt64("persistence-timeout")))
+			req.HealthCheckConnectPort = requests.NewInteger(int(listenerConfig.GetInt32("health-check.connect-port", listenPort)))
+			req.HealthyThreshold = requests.NewInteger(int(listenerConfig.GetInt64("health-check.threshold", 3)))
+			req.UnhealthyThreshold = requests.NewInteger(int(listenerConfig.GetInt64("health-check.unhealthy-threshold", 3)))
+			req.HealthCheckConnectTimeout = requests.NewInteger(int(listenerConfig.GetInt64("health-check.timeout", 5)))
+			req.HealthCheckInterval = requests.NewInteger(int(listenerConfig.GetInt64("health-check.interval", 2)))
+			req.VServerGroupId = listenerConfig.GetString("vserver-group-id")
+
+			// TCP Part
+			req.HealthCheckType = listenerConfig.GetString("health-check.type", "tcp")
+			req.HealthCheckDomain = listenerConfig.GetString("health-check.domain")
+			req.HealthCheckURI = listenerConfig.GetString("health-check.url")
+			req.HealthCheckHttpCode = listenerConfig.GetString("health-check.http-code", "http_2xx")
+
+			reqs = append(reqs, req)
+		}
+	}
+
+	for i := 0; i < len(reqs); i++ {
+
+		_, err = p.SLBClient().CreateLoadBalancerTCPListener(reqs[i])
+		if err != nil {
+			return
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("SLB-BANLANCER-ID", reqs[i].LoadBalancerId).
+			WithField("SLB-BANLANCER-LISTEN-PORT", reqs[i].ListenerPort).
+			Infoln("SLB TCP listener created")
+
+		err = p.startSLBListener(reqs[i].LoadBalancerId, reqs[i].ListenerPort)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (p *Aliyun) CreateLoadBalancerUDPListener() (err error) {
+	currentLBSs, err := p.ListLoadBalancers(true)
+	if err != nil {
+		return
+	}
+
+	if err != nil {
+		return
+	}
+
+	balancersConfig := p.Config.GetConfig("aliyun.slb.balancer")
+
+	slbNames := balancersConfig.Keys()
+
+	if len(slbNames) == 0 {
+		return
+	}
+
+	var reqs []*slb.CreateLoadBalancerUDPListenerRequest
+
+	for _, slbName := range slbNames {
+
+		slbInstance, exist := currentLBSs[slbName]
+
+		if !exist {
+			err = fmt.Errorf("slb of %s not exist", slbName)
+			return
+		}
+
+		lbConfig := balancersConfig.GetConfig(slbName)
+
+		listenersConfig := lbConfig.GetConfig("listener.udp")
+
+		if listenersConfig.IsEmpty() {
+			continue
+		}
+
+		var alreadyListendPorts = make(map[string]bool)
+
+		for _, port := range slbInstance.ListenerPorts.ListenerPort {
+			alreadyListendPorts[port] = true
+		}
+
+		for _, listenerName := range listenersConfig.Keys() {
+
+			listenerConfig := listenersConfig.GetConfig(listenerName)
+
+			if listenerConfig.IsEmpty() {
+				err = fmt.Errorf("listen config is empty: %s.%s", slbName, listenerName)
+				return
+			}
+
+			listenPort := listenerConfig.GetInt32("listen-port")
+
+			if listenPort <= 0 {
+				err = fmt.Errorf("listen port is not correct, listener: %s.%s", slbName, listenerName)
+				return
+			}
+
+			if alreadyListendPorts[strconv.Itoa(int(listenPort))] {
+
+				logrus.WithField("CODE", p.Code).
+					WithField("SLB-NAME", slbName).
+					WithField("SLB-ID", slbInstance.LoadBalancerId).
+					WithField("SLB-LISTENER", listenerName).
+					WithField("UDP-PORT", listenPort).Infoln("Listener already created")
+
+				continue
+			}
+
+			req := slb.CreateCreateLoadBalancerUDPListenerRequest()
+
+			// Common part
+			req.LoadBalancerId = slbInstance.LoadBalancerId
+			req.ListenerPort = requests.NewInteger(int(listenPort))
+			req.BackendServerPort = requests.NewInteger(int(listenerConfig.GetInt64("server-port")))
+			req.Bandwidth = requests.NewInteger(int(listenerConfig.GetInt64("band-width")))
+			req.Scheduler = listenerConfig.GetString("scheduler", "wrr")
+			req.PersistenceTimeout = requests.NewInteger(int(listenerConfig.GetInt64("persistence-timeout")))
+			req.HealthCheckConnectPort = requests.NewInteger(int(listenerConfig.GetInt32("health-check.connect-port", listenPort)))
+			req.HealthyThreshold = requests.NewInteger(int(listenerConfig.GetInt64("health-check.threshold", 3)))
+			req.UnhealthyThreshold = requests.NewInteger(int(listenerConfig.GetInt64("health-check.unhealthy-threshold", 3)))
+			req.HealthCheckConnectTimeout = requests.NewInteger(int(listenerConfig.GetInt64("health-check.timeout", 5)))
+			req.HealthCheckInterval = requests.NewInteger(int(listenerConfig.GetInt64("health-check.interval", 2)))
+			req.VServerGroupId = listenerConfig.GetString("vserver-group-id")
+
+			reqs = append(reqs, req)
+		}
+	}
+
+	for i := 0; i < len(reqs); i++ {
+		_, err = p.SLBClient().CreateLoadBalancerUDPListener(reqs[i])
+		if err != nil {
+			return
+		}
+
+		logrus.WithField("CODE", p.Code).
+			WithField("SLB-BANLANCER-ID", reqs[i].LoadBalancerId).
+			WithField("SLB-BANLANCER-LISTEN-PORT", reqs[i].ListenerPort).
+			Infoln("SLB UDP listener created")
+
+		err = p.startSLBListener(reqs[i].LoadBalancerId, reqs[i].ListenerPort)
+		if err != nil {
+			return
+		}
+	}
 
 	return
 }
@@ -449,15 +533,21 @@ func (p *Aliyun) ListSLBHTTPListeners() (listerners map[string][]*slb.DescribeLo
 
 		lbConfig := balancersConfig.GetConfig(slbName)
 
-		listenersConfig := lbConfig.GetConfig("http-listener")
+		listenersConfig := lbConfig.GetConfig("listener.http")
 
 		if listenersConfig.IsEmpty() {
 			continue
 		}
 
 		for _, port := range slbInstance.ListenerPorts.ListenerPort {
+
+			req := slb.CreateDescribeLoadBalancerHTTPListenerAttributeRequest()
+
+			req.LoadBalancerId = slbInstance.LoadBalancerId
+			req.Port = port
+
 			var resp *slb.DescribeLoadBalancerHTTPListenerAttributeResponse
-			resp, err = p.SLBClient().DescribeLoadBalancerHTTPListenerAttribute(slbInstance.LoadBalancerId, port)
+			resp, err = p.SLBClient().DescribeLoadBalancerHTTPListenerAttribute(req)
 			if err != nil {
 				return
 			}
@@ -471,29 +561,18 @@ func (p *Aliyun) ListSLBHTTPListeners() (listerners map[string][]*slb.DescribeLo
 	return
 }
 
-type Rule struct {
-	RuleName       string
-	Domain         string
-	Url            string `json:",omitempty"`
-	VServerGroupId string
-}
+func (p *Aliyun) ListSLBHTTPSListeners() (listerners map[string][]*slb.DescribeLoadBalancerHTTPSListenerAttributeResponse, err error) {
 
-func (p *Aliyun) CreateSLBHTTPListenerRuleArgs() (createArgs []*slb.CreateRulesArgs, err error) {
-
-	balancersConfig := p.Config.GetConfig("aliyun.slb.balancer")
-
-	if balancersConfig.IsEmpty() {
-		return
-	}
-
-	balancers, err := p.ListLoadBalancers(true)
+	currentLBSs, err := p.ListLoadBalancers(true)
 	if err != nil {
 		return
 	}
 
-	if len(balancers) == 0 {
+	if err != nil {
 		return
 	}
+
+	balancersConfig := p.Config.GetConfig("aliyun.slb.balancer")
 
 	slbNames := balancersConfig.Keys()
 
@@ -501,132 +580,42 @@ func (p *Aliyun) CreateSLBHTTPListenerRuleArgs() (createArgs []*slb.CreateRulesA
 		return
 	}
 
-	var args []*slb.CreateRulesArgs
+	slbListeners := make(map[string][]*slb.DescribeLoadBalancerHTTPSListenerAttributeResponse)
 
 	for _, slbName := range slbNames {
 
-		slbInstance, exist := balancers[slbName]
+		slbInstance, exist := currentLBSs[slbName]
 
 		if !exist {
-			err = fmt.Errorf("slb instance not exist: %s", slbName)
-			return
-		}
-
-		var alreadyListendPorts = make(map[int]bool)
-
-		for _, port := range slbInstance.ListenerPorts.ListenerPort {
-			alreadyListendPorts[port] = true
+			continue
 		}
 
 		lbConfig := balancersConfig.GetConfig(slbName)
-		listenersConfig := lbConfig.GetConfig("http-listener")
+
+		listenersConfig := lbConfig.GetConfig("listener.https")
 
 		if listenersConfig.IsEmpty() {
 			continue
 		}
 
-		for _, listenerName := range listenersConfig.Keys() {
-			listenerConf := listenersConfig.GetConfig(listenerName)
+		for _, port := range slbInstance.ListenerPorts.ListenerPort {
 
-			if listenerConf.IsEmpty() {
-				continue
-			}
+			req := slb.CreateDescribeLoadBalancerHTTPSListenerAttributeRequest()
 
-			port := int(listenerConf.GetInt32("listen-port"))
+			req.LoadBalancerId = slbInstance.LoadBalancerId
+			req.Port = port
 
-			if !alreadyListendPorts[port] {
-				err = fmt.Errorf("port %d not listened in balance %s", port, slbName)
-				return
-			}
-
-			var vSrvGroupsResp *slb.DescribeVServerGroupsResponse
-			vSrvGroupsResp, err = p.SLBClient().DescribeVServerGroups(&slb.DescribeVServerGroupsArgs{slbInstance.LoadBalancerId, common.Region(p.Region)})
+			var resp *slb.DescribeLoadBalancerHTTPSListenerAttributeResponse
+			resp, err = p.SLBClient().DescribeLoadBalancerHTTPSListenerAttribute(req)
 			if err != nil {
 				return
 			}
 
-			if vSrvGroupsResp == nil || len(vSrvGroupsResp.VServerGroups.VServerGroup) == 0 {
-				err = fmt.Errorf("no vserver group exist, lb: %s, listener: %s", slbName, listenerName)
-				return
-			}
-
-			var mapSrvGroups = make(map[string]string) //name:id
-
-			for _, vg := range vSrvGroupsResp.VServerGroups.VServerGroup {
-				mapSrvGroups[vg.VServerGroupName] = vg.VServerGroupId
-			}
-
-			var ruleDescribRep *slb.DescribeRulesResponse
-			ruleDescribRep, err = p.SLBClient().DescribeRules(&slb.DescribeRulesArgs{
-				RegionId:       common.Region(p.Region),
-				LoadBalancerId: slbInstance.LoadBalancerId,
-				ListenerPort:   port,
-			})
-
-			mapExistsRules := map[string]slb.Rule{}
-
-			for i, rule := range ruleDescribRep.Rules.Rule {
-				mapExistsRules[rule.RuleName] = ruleDescribRep.Rules.Rule[i]
-			}
-
-			rulesConf := listenerConf.GetConfig("rules")
-
-			var rules []Rule
-
-			for _, ruleName := range rulesConf.Keys() {
-
-				if _, ruleExist := mapExistsRules[ruleName]; ruleExist {
-					logrus.WithField("CODE", p.Code).
-						WithField("SLB-NAME", slbName).
-						WithField("SLB-ID", slbInstance.LoadBalancerId).
-						WithField("SLB-LISTENER", listenerName).
-						WithField("LSB-LISTENER-RULE", ruleName).Infoln("Listener rule already created")
-
-					continue
-				}
-
-				ruleConf := rulesConf.GetConfig(ruleName)
-
-				vGroupName := ruleConf.GetString("vserver-group-name")
-
-				vGroupId, exist := mapSrvGroups[vGroupName]
-				if !exist {
-					err = fmt.Errorf("vgroup of %s in lb %s not created.", vGroupName, slbName)
-					return
-				}
-
-				domain := ruleConf.GetString("domain")
-				url := ruleConf.GetString("url")
-
-				r := Rule{
-					RuleName:       ruleName,
-					Domain:         domain,
-					Url:            url,
-					VServerGroupId: vGroupId,
-				}
-
-				rules = append(rules, r)
-			}
-
-			var ruleData []byte
-			ruleData, err = json.Marshal(rules)
-			if err != nil {
-				err = fmt.Errorf("marshal rule list error, slb instance: %s, listener: %s", slbName, listenerName)
-				return
-			}
-
-			arg := &slb.CreateRulesArgs{
-				RegionId:       common.Region(p.Region),
-				LoadBalancerId: slbInstance.LoadBalancerId,
-				ListenerPort:   port,
-				RuleList:       string(ruleData),
-			}
-
-			args = append(args, arg)
+			slbListeners[slbName] = append(slbListeners[slbName], resp)
 		}
 	}
 
-	createArgs = args
+	listerners = slbListeners
 
 	return
 }

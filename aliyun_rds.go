@@ -206,7 +206,7 @@ func (p *Aliyun) CreateRDSInstances() (createResps []*rds.CreateDBInstanceRespon
 		arg.PayType = rdsConf.GetString("pay-type", "Postpaid")
 
 		arg.DBInstanceClass = rdsConf.GetString("instance-class", "rds.mys2.small")
-		arg.DBInstanceStorage = requests.Integer(rdsConf.GetString("instance-storage", "5"))
+		arg.DBInstanceStorage = requests.NewInteger(int(rdsConf.GetInt32("instance-storage", 5)))
 		arg.DBInstanceNetType = rdsConf.GetString("instance-net-type", "Internet")
 		arg.DBInstanceDescription = rdsName
 		arg.InstanceNetworkType = rdsConf.GetString("instance-network-type", "VPC")
