@@ -38,8 +38,6 @@ func (p *Aliyun) AddDomainRecord() (err error) {
 		}
 	}
 
-	p.DNSClient().AddBatchDomainRecords(request)
-
 	return
 }
 
