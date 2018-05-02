@@ -1,7 +1,6 @@
 package aliyun
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 
