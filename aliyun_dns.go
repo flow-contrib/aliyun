@@ -3,6 +3,8 @@ package aliyun
 import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/alidns"
+
+	"github.com/sirupsen/logrus"
 )
 
 func (p *Aliyun) AddDomainRecord() (err error) {
@@ -33,9 +35,25 @@ func (p *Aliyun) AddDomainRecord() (err error) {
 
 		_, err = p.DNSClient().AddDomainRecord(req)
 
+		if IsAliErrCode(err, "DomainRecordDuplicate") {
+
+			logrus.WithField("DOMAIN", req.DomainName).
+				WithField("RR", req.RR).
+				WithField("TYPE", req.Type).
+				WithField("VALUE", req.Value).Warnln("Domain record already exist")
+
+			err = nil
+			return
+		}
+
 		if err != nil {
 			return
 		}
+
+		logrus.WithField("DOMAIN", req.DomainName).
+			WithField("RR", req.RR).
+			WithField("TYPE", req.Type).
+			WithField("VALUE", req.Value).Infoln("Domain record created")
 	}
 
 	return

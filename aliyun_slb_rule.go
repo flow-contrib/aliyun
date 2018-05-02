@@ -7,6 +7,7 @@ import (
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/slb"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -154,21 +155,23 @@ func (p *Aliyun) CreateSLBHTTPListenerRule() (err error) {
 				rules = append(rules, r)
 			}
 
-			var ruleData []byte
-			ruleData, err = json.Marshal(rules)
-			if err != nil {
-				err = fmt.Errorf("marshal rule list error, slb instance: %s, listener: %s", slbName, listenerName)
-				return
+			if len(rules) > 0 {
+				var ruleData []byte
+				ruleData, err = json.Marshal(rules)
+				if err != nil {
+					err = fmt.Errorf("marshal rule list error, slb instance: %s, listener: %s", slbName, listenerName)
+					return
+				}
+
+				req := slb.CreateCreateRulesRequest()
+
+				req.RegionId = p.Region
+				req.LoadBalancerId = slbInstance.LoadBalancerId
+				req.ListenerPort = requests.NewInteger(port)
+				req.RuleList = string(ruleData)
+
+				reqs = append(reqs, req)
 			}
-
-			req := slb.CreateCreateRulesRequest()
-
-			req.RegionId = p.Region
-			req.LoadBalancerId = slbInstance.LoadBalancerId
-			req.ListenerPort = requests.NewInteger(port)
-			req.RuleList = string(ruleData)
-
-			reqs = append(reqs, req)
 		}
 	}
 

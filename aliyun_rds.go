@@ -486,6 +486,11 @@ func (p *Aliyun) AllocateInstancePublicConnection() (err error) {
 
 		_, err = p.RDSClient().AllocateInstancePublicConnection(req)
 
+		if IsAliErrCode(err, "NetTypeExists") {
+			err = nil
+			continue
+		}
+
 		if err != nil {
 			return
 		}
