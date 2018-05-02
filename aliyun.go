@@ -16,6 +16,8 @@ import (
 
 	"github.com/gogap/config"
 	"github.com/gogap/context"
+
+	alierrors "github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
 )
 
 type Aliyun struct {
@@ -144,9 +146,19 @@ func (p *Aliyun) isSignd(str string) bool {
 }
 
 func IsAliErrCode(err error, code string) bool {
-	if aliyunErr, ok := err.(*common.Error); ok {
-		if aliyunErr.Code == code {
-			return true
+
+	switch v := err.(type) {
+	case alierrors.Error:
+		{
+			if v.ErrorCode() == code {
+				return true
+			}
+		}
+	case *common.Error:
+		{
+			if v.Code == code {
+				return true
+			}
 		}
 	}
 
