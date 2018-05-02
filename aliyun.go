@@ -10,6 +10,7 @@ import (
 	"github.com/denverdino/aliyungo/ecs"
 	"github.com/denverdino/aliyungo/slb"
 
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/alidns"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
@@ -35,6 +36,7 @@ type Aliyun struct {
 	rdsClient *rds.Client
 	csClient  *cs.Client
 	slbClient *slb.Client
+	dnsClient *alidns.Client
 }
 
 func NewAliyun(ctx context.Context, conf config.Configuration) *Aliyun {
@@ -135,6 +137,18 @@ func (p *Aliyun) SLBClient() *slb.Client {
 		p.slbClient = slb.NewSLBClient(p.AccessKeyId, p.AccessKeySecret, common.Region(p.Region))
 	}
 	return p.slbClient
+}
+
+func (p *Aliyun) DNSClient() *alidns.Client {
+	if p.dnsClient == nil {
+		var err error
+		p.dnsClient, err = alidns.NewClientWithAccessKey(p.Region, p.AccessKeyId, p.AccessKeySecret)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return p.dnsClient
 }
 
 func (p *Aliyun) signWithCode(str string) string {
