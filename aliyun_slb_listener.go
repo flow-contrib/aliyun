@@ -619,3 +619,121 @@ func (p *Aliyun) ListSLBHTTPSListeners() (listerners map[string][]*slb.DescribeL
 
 	return
 }
+
+func (p *Aliyun) ListSLBTCPListeners() (listerners map[string][]*slb.DescribeLoadBalancerTCPListenerAttributeResponse, err error) {
+
+	currentLBSs, err := p.ListLoadBalancers(true)
+	if err != nil {
+		return
+	}
+
+	if err != nil {
+		return
+	}
+
+	balancersConfig := p.Config.GetConfig("aliyun.slb.balancer")
+
+	slbNames := balancersConfig.Keys()
+
+	if len(slbNames) == 0 {
+		return
+	}
+
+	slbListeners := make(map[string][]*slb.DescribeLoadBalancerTCPListenerAttributeResponse)
+
+	for _, slbName := range slbNames {
+
+		slbInstance, exist := currentLBSs[slbName]
+
+		if !exist {
+			continue
+		}
+
+		lbConfig := balancersConfig.GetConfig(slbName)
+
+		listenersConfig := lbConfig.GetConfig("listener.tcp")
+
+		if listenersConfig.IsEmpty() {
+			continue
+		}
+
+		for _, port := range slbInstance.ListenerPorts.ListenerPort {
+
+			req := slb.CreateDescribeLoadBalancerTCPListenerAttributeRequest()
+
+			req.LoadBalancerId = slbInstance.LoadBalancerId
+			req.Port = port
+
+			var resp *slb.DescribeLoadBalancerTCPListenerAttributeResponse
+			resp, err = p.SLBClient().DescribeLoadBalancerTCPListenerAttribute(req)
+			if err != nil {
+				return
+			}
+
+			slbListeners[slbName] = append(slbListeners[slbName], resp)
+		}
+	}
+
+	listerners = slbListeners
+
+	return
+}
+
+func (p *Aliyun) ListSLBUDPListeners() (listerners map[string][]*slb.DescribeLoadBalancerUDPListenerAttributeResponse, err error) {
+
+	currentLBSs, err := p.ListLoadBalancers(true)
+	if err != nil {
+		return
+	}
+
+	if err != nil {
+		return
+	}
+
+	balancersConfig := p.Config.GetConfig("aliyun.slb.balancer")
+
+	slbNames := balancersConfig.Keys()
+
+	if len(slbNames) == 0 {
+		return
+	}
+
+	slbListeners := make(map[string][]*slb.DescribeLoadBalancerUDPListenerAttributeResponse)
+
+	for _, slbName := range slbNames {
+
+		slbInstance, exist := currentLBSs[slbName]
+
+		if !exist {
+			continue
+		}
+
+		lbConfig := balancersConfig.GetConfig(slbName)
+
+		listenersConfig := lbConfig.GetConfig("listener.tcp")
+
+		if listenersConfig.IsEmpty() {
+			continue
+		}
+
+		for _, port := range slbInstance.ListenerPorts.ListenerPort {
+
+			req := slb.CreateDescribeLoadBalancerUDPListenerAttributeRequest()
+
+			req.LoadBalancerId = slbInstance.LoadBalancerId
+			req.Port = port
+
+			var resp *slb.DescribeLoadBalancerUDPListenerAttributeResponse
+			resp, err = p.SLBClient().DescribeLoadBalancerUDPListenerAttribute(req)
+			if err != nil {
+				return
+			}
+
+			slbListeners[slbName] = append(slbListeners[slbName], resp)
+		}
+	}
+
+	listerners = slbListeners
+
+	return
+}

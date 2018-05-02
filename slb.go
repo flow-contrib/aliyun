@@ -1,12 +1,16 @@
 package aliyun
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/gogap/config"
 	"github.com/gogap/context"
 	"github.com/gogap/flow"
 )
 
 func init() {
+	flow.RegisterHandler("devops.aliyun.slb.balancer.describe", DescribeSLBBalancers)
 	flow.RegisterHandler("devops.aliyun.slb.balancer.create", CreateSLBBalancer)
 	flow.RegisterHandler("devops.aliyun.slb.balancer.delete", DeleteSLBBalancer)
 	flow.RegisterHandler("devops.aliyun.slb.balancer.listener.http.create", CreateSLBHTTPBanlancerListener)
@@ -15,6 +19,28 @@ func init() {
 	flow.RegisterHandler("devops.aliyun.slb.balancer.listener.udp.create", CreateSLBUDPBanlancerListener)
 	flow.RegisterHandler("devops.aliyun.slb.balancer.listener.vserver-group.create", CreateVServerGroup)
 	flow.RegisterHandler("devops.aliyun.slb.balancer.listener.rules.create", CreateSLBHTTPListenerRule)
+}
+
+func DescribeSLBBalancers(ctx context.Context, conf config.Configuration) (err error) {
+	aliyun := NewAliyun(ctx, conf)
+
+	lbs, err := aliyun.ListLoadBalancers(false)
+	if err != nil {
+		return
+	}
+
+	data, err := json.Marshal(lbs)
+	if err != nil {
+		return
+	}
+
+	flow.AppendOutput(ctx, flow.NameValue{Name: "ALIYUN_SLB_BALANCERS", Value: data, Tags: []string{"aliyun", "slb", "balancer"}})
+
+	for _, lb := range lbs {
+		setENV(fmt.Sprintf("ENV_ALIYUN_SLB_%s_ADDRESS", lb.LoadBalancerName), lb.Address)
+	}
+
+	return
 }
 
 func CreateSLBBalancer(ctx context.Context, conf config.Configuration) (err error) {
