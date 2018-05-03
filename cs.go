@@ -1,7 +1,6 @@
 package aliyun
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/denverdino/aliyungo/common"
@@ -62,6 +61,16 @@ func DeleteDockerCluster(ctx context.Context, conf config.Configuration) (err er
 
 	for _, arg := range args {
 
+		if arg.State == cs.Deleting ||
+			arg.State == cs.Deleted {
+
+			logrus.WithField("CODE", aliyun.Code).
+				WithField("DOCKER-CLUSTER-ID", arg.ClusterID).
+				WithField("DOCKER-CLUSTER-NAME", arg.Name).Infof("Docker cluster already in status of %s", arg.State)
+
+			continue
+		}
+
 		err = aliyun.CSClient().DeleteCluster(arg.ClusterID)
 
 		if err != nil {
@@ -112,7 +121,7 @@ func waitCSClusterStatusTo(ctx context.Context, conf config.Configuration, statu
 
 			if e != nil {
 
-				if strings.Contains(e.Error(), "ErrorClusterNotFound") {
+				if IsAliErrCode(e, "ErrorClusterNotFound") {
 					return
 				}
 
