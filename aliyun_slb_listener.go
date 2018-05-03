@@ -6,6 +6,7 @@ import (
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/slb"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -222,10 +223,40 @@ func (p *Aliyun) CreateLoadBalancerHTTPSListener() (err error) {
 				continue
 			}
 
+			srvCertId := listenerConfig.GetString("server-certificate-id")
+
+			if len(srvCertId) == 0 {
+
+				srvCertName := listenerConfig.GetString("server-certificate-name")
+				if len(srvCertName) > 0 {
+					srvCertId, err = p.getSLBServerCertByName(srvCertName)
+
+					if err != nil {
+						return
+					}
+				} else {
+					err = fmt.Errorf("the https listener of '%s' should specify the 'server-certificate-id' or 'server-certificate-name'", listenerName)
+					return
+				}
+			}
+
+			caCertId := listenerConfig.GetString("ca-certificate-id")
+
+			if len(caCertId) == 0 {
+				caCertName := listenerConfig.GetString("ca-certificate-name")
+				if len(caCertName) > 0 {
+					caCertId, err = p.getSLBCACertByName(caCertName)
+
+					if err != nil {
+						return
+					}
+				}
+			}
+
 			req := slb.CreateCreateLoadBalancerHTTPSListenerRequest()
 
-			req.ServerCertificateId = listenerConfig.GetString("server-certificate-id")
-			req.CACertificateId = listenerConfig.GetString("ca-certificate-id")
+			req.ServerCertificateId = srvCertId
+			req.CACertificateId = caCertId
 			req.LoadBalancerId = slbInstance.LoadBalancerId
 			req.ListenerPort = requests.NewInteger(int(listenPort))
 			req.BackendServerPort = requests.NewInteger(int(listenerConfig.GetInt64("server-port")))
@@ -734,6 +765,87 @@ func (p *Aliyun) ListSLBUDPListeners() (listerners map[string][]*slb.DescribeLoa
 	}
 
 	listerners = slbListeners
+
+	return
+}
+
+func (p *Aliyun) ListSLBServerCerts() (certs []slb.ServerCertificate, err error) {
+	req := slb.CreateDescribeServerCertificatesRequest()
+	req.RegionId = p.Region
+
+	resp, err := p.SLBClient().DescribeServerCertificates(req)
+
+	if err != nil {
+		return
+	}
+
+	certs = resp.ServerCertificates.ServerCertificate
+	return
+}
+
+func (p *Aliyun) getSLBServerCertByName(srvCertName string) (certId string, err error) {
+
+	certs, err := p.ListSLBServerCerts()
+
+	if err != nil {
+		return
+	}
+
+	srvCertId := ""
+	for _, cert := range certs {
+		if cert.ServerCertificateName == srvCertName {
+			srvCertId = cert.ServerCertificateId
+			break
+		}
+	}
+
+	if len(srvCertId) == 0 {
+		err = fmt.Errorf("server cert of %s not found", srvCertName)
+		return
+	}
+
+	certId = srvCertId
+
+	return
+}
+
+func (p *Aliyun) ListSLBCACerts() (certs []slb.CACertificate, err error) {
+	req := slb.CreateDescribeCACertificatesRequest()
+	req.RegionId = p.Region
+
+	resp, err := p.SLBClient().DescribeCACertificates(req)
+
+	if err != nil {
+		return
+	}
+
+	certs = resp.CACertificates.CACertificate
+
+	return
+}
+
+func (p *Aliyun) getSLBCACertByName(caCertName string) (certId string, err error) {
+
+	certs, err := p.ListSLBCACerts()
+
+	if err != nil {
+		return
+	}
+
+	caCertId := ""
+	for _, cert := range certs {
+		if cert.CACertificateName == caCertName {
+			caCertId = cert.CACertificateId
+			break
+		}
+	}
+
+	if len(caCertId) == 0 {
+		err = fmt.Errorf("ca cert of %s not found", caCertName)
+		return
+	}
+
+	certId = caCertId
 
 	return
 }

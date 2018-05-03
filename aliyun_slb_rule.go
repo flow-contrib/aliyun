@@ -44,7 +44,6 @@ func (p *Aliyun) CreateSLBHTTPListenerRule() (err error) {
 	var reqs []*slb.CreateRulesRequest
 
 	for _, slbName := range slbNames {
-
 		slbInstance, exist := balancers[slbName]
 
 		if !exist {
@@ -58,25 +57,12 @@ func (p *Aliyun) CreateSLBHTTPListenerRule() (err error) {
 			alreadyListendPorts[port] = true
 		}
 
-		lbConfig := balancersConfig.GetConfig(slbName)
-		listenersConfig := lbConfig.GetConfig("listener.http")
+		for _, listenerConfName := range []string{"listener.http", "listener.https"} {
+			lbConfig := balancersConfig.GetConfig(slbName)
+			listenersConfig := lbConfig.GetConfig(listenerConfName)
 
-		if listenersConfig.IsEmpty() {
-			continue
-		}
-
-		for _, listenerName := range listenersConfig.Keys() {
-			listenerConf := listenersConfig.GetConfig(listenerName)
-
-			if listenerConf.IsEmpty() {
+			if listenersConfig.IsEmpty() {
 				continue
-			}
-
-			port := int(listenerConf.GetInt32("listen-port"))
-
-			if !alreadyListendPorts[strconv.Itoa(port)] {
-				err = fmt.Errorf("port %d not listened in balance %s", port, slbName)
-				return
 			}
 
 			describeVgroupReq := slb.CreateDescribeVServerGroupsRequest()
@@ -91,7 +77,7 @@ func (p *Aliyun) CreateSLBHTTPListenerRule() (err error) {
 			}
 
 			if vSrvGroupsResp == nil || len(vSrvGroupsResp.VServerGroups.VServerGroup) == 0 {
-				err = fmt.Errorf("no vserver group exist, lb: %s, listener: %s", slbName, listenerName)
+				err = fmt.Errorf("no vserver group exist, lb: %s", slbName)
 				return
 			}
 
@@ -101,76 +87,91 @@ func (p *Aliyun) CreateSLBHTTPListenerRule() (err error) {
 				mapSrvGroups[vg.VServerGroupName] = vg.VServerGroupId
 			}
 
-			describeRulReq := slb.CreateDescribeRulesRequest()
+			for _, listenerName := range listenersConfig.Keys() {
+				listenerConf := listenersConfig.GetConfig(listenerName)
 
-			describeRulReq.RegionId = p.Region
-			describeRulReq.LoadBalancerId = slbInstance.LoadBalancerId
-			describeRulReq.ListenerPort = requests.NewInteger(port)
-
-			var ruleDescribRep *slb.DescribeRulesResponse
-			ruleDescribRep, err = p.SLBClient().DescribeRules(describeRulReq)
-
-			mapExistsRules := map[string]slb.Rule{}
-
-			for i, rule := range ruleDescribRep.Rules.Rule {
-				mapExistsRules[rule.RuleName] = ruleDescribRep.Rules.Rule[i]
-			}
-
-			rulesConf := listenerConf.GetConfig("rules")
-
-			var rules []Rule
-
-			for _, ruleName := range rulesConf.Keys() {
-
-				if _, ruleExist := mapExistsRules[ruleName]; ruleExist {
-					logrus.WithField("CODE", p.Code).
-						WithField("SLB-NAME", slbName).
-						WithField("SLB-ID", slbInstance.LoadBalancerId).
-						WithField("SLB-LISTENER", listenerName).
-						WithField("LSB-LISTENER-RULE", ruleName).Infoln("Listener rule already created")
-
+				if listenerConf.IsEmpty() {
 					continue
 				}
 
-				ruleConf := rulesConf.GetConfig(ruleName)
+				port := int(listenerConf.GetInt32("listen-port"))
 
-				vGroupName := ruleConf.GetString("vserver-group-name")
-
-				vGroupId, exist := mapSrvGroups[vGroupName]
-				if !exist {
-					err = fmt.Errorf("vgroup of %s in lb %s not created.", vGroupName, slbName)
+				if !alreadyListendPorts[strconv.Itoa(port)] {
+					err = fmt.Errorf("port %d not listened in balance %s", port, slbName)
 					return
 				}
 
-				domain := ruleConf.GetString("domain")
-				url := ruleConf.GetString("url")
+				describeRulReq := slb.CreateDescribeRulesRequest()
 
-				r := Rule{
-					RuleName:       ruleName,
-					Domain:         domain,
-					Url:            url,
-					VServerGroupId: vGroupId,
+				describeRulReq.RegionId = p.Region
+				describeRulReq.LoadBalancerId = slbInstance.LoadBalancerId
+				describeRulReq.ListenerPort = requests.NewInteger(port)
+
+				var ruleDescribRep *slb.DescribeRulesResponse
+				ruleDescribRep, err = p.SLBClient().DescribeRules(describeRulReq)
+
+				mapExistsRules := map[string]slb.Rule{}
+
+				for i, rule := range ruleDescribRep.Rules.Rule {
+					mapExistsRules[rule.RuleName] = ruleDescribRep.Rules.Rule[i]
 				}
 
-				rules = append(rules, r)
-			}
+				rulesConf := listenerConf.GetConfig("rules")
 
-			if len(rules) > 0 {
-				var ruleData []byte
-				ruleData, err = json.Marshal(rules)
-				if err != nil {
-					err = fmt.Errorf("marshal rule list error, slb instance: %s, listener: %s", slbName, listenerName)
-					return
+				var rules []Rule
+
+				for _, ruleName := range rulesConf.Keys() {
+
+					if _, ruleExist := mapExistsRules[ruleName]; ruleExist {
+						logrus.WithField("CODE", p.Code).
+							WithField("SLB-NAME", slbName).
+							WithField("SLB-ID", slbInstance.LoadBalancerId).
+							WithField("SLB-LISTENER", listenerName).
+							WithField("LSB-LISTENER-RULE", ruleName).Infoln("Listener rule already created")
+
+						continue
+					}
+
+					ruleConf := rulesConf.GetConfig(ruleName)
+
+					vGroupName := ruleConf.GetString("vserver-group-name")
+
+					vGroupId, exist := mapSrvGroups[vGroupName]
+					if !exist {
+						err = fmt.Errorf("vgroup of %s in lb %s not created.", vGroupName, slbName)
+						return
+					}
+
+					domain := ruleConf.GetString("domain")
+					url := ruleConf.GetString("url")
+
+					r := Rule{
+						RuleName:       ruleName,
+						Domain:         domain,
+						Url:            url,
+						VServerGroupId: vGroupId,
+					}
+
+					rules = append(rules, r)
 				}
 
-				req := slb.CreateCreateRulesRequest()
+				if len(rules) > 0 {
+					var ruleData []byte
+					ruleData, err = json.Marshal(rules)
+					if err != nil {
+						err = fmt.Errorf("marshal rule list error, slb instance: %s, listener: %s", slbName, listenerName)
+						return
+					}
 
-				req.RegionId = p.Region
-				req.LoadBalancerId = slbInstance.LoadBalancerId
-				req.ListenerPort = requests.NewInteger(port)
-				req.RuleList = string(ruleData)
+					req := slb.CreateCreateRulesRequest()
 
-				reqs = append(reqs, req)
+					req.RegionId = p.Region
+					req.LoadBalancerId = slbInstance.LoadBalancerId
+					req.ListenerPort = requests.NewInteger(port)
+					req.RuleList = string(ruleData)
+
+					reqs = append(reqs, req)
+				}
 			}
 		}
 	}
