@@ -1,6 +1,7 @@
 package aliyun
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/denverdino/aliyungo/common"
@@ -121,14 +122,14 @@ func waitCSClusterStatusTo(ctx context.Context, conf config.Configuration, statu
 
 			if e != nil {
 
-				if IsAliErrCode(e, "ErrorClusterNotFound") {
+				if strings.Contains(e.Error(), "ErrorClusterNotFound") {
 					return
 				}
 
 				logrus.WithField("CODE", aliyun.Code).
 					WithError(e).
 					WithField("DOCKER-CLUSTER-ID", cluster.ClusterID).
-					WithField("DOCKER-CLUSTER-NAME", cluster.Name).Errorln("Wait for cluster status to %s failure", status)
+					WithField("DOCKER-CLUSTER-NAME", cluster.Name).Errorf("Wait for cluster status to %s failure", status)
 
 				select {
 				case errChan <- e:

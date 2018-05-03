@@ -43,7 +43,7 @@ func (p *Aliyun) AddDomainRecord() (err error) {
 				WithField("VALUE", req.Value).Warnln("Domain record already exist")
 
 			err = nil
-			return
+			continue
 		}
 
 		if err != nil {
