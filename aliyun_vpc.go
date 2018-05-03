@@ -423,6 +423,8 @@ func (p *Aliyun) DeleteVSwitch() (err error) {
 			return
 		}
 
+		time.Sleep(time.Second * 2) // waitting for router list to be deleted, or else, it will error while delete vpc
+
 		logrus.WithField("CODE", p.Code).
 			WithField("ECS-VSWITCH-ID", req.VSwitchId).
 			Infoln("VSwitch deleted")
