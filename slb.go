@@ -37,7 +37,7 @@ func DescribeSLBBalancers(ctx context.Context, conf config.Configuration) (err e
 	flow.AppendOutput(ctx, flow.NameValue{Name: "ALIYUN_SLB_BALANCERS", Value: data, Tags: []string{"aliyun", "slb", "balancer"}})
 
 	for _, lb := range lbs {
-		setENV(fmt.Sprintf("ENV_ALIYUN_SLB_%s_ADDRESS", lb.LoadBalancerName), lb.Address)
+		setENV(fmt.Sprintf("SLB_%s_ADDRESS", lb.LoadBalancerName), lb.Address)
 	}
 
 	return
